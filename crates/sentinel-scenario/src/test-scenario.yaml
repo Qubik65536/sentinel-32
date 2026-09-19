@@ -1,4 +1,4 @@
-# Full scenario compiler fixture retained for scenario-policy tests.
+# Internal full-schema fixture for scenario compiler and policy tests.
 #
 # The hardware-facing sections are:
 #   types       values exchanged through hardware registers

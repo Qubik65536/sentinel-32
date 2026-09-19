@@ -20,7 +20,7 @@ mod tests {
 
     use super::*;
 
-    const FIXTURE: &str = include_str!("../../../examples/full-scenario.yaml");
+    const FIXTURE: &str = include_str!("test-scenario.yaml");
     const HARDWARE_FIXTURE: &str = include_str!("../../../examples/lab-scenario.yaml");
 
     fn compiled() -> Compilation {

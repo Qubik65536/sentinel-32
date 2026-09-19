@@ -35,7 +35,7 @@ Current requirements give AI one advisory function: compare a bounded current-st
 - `crates/sentinel-app`: host/QNX CLI for VM and scenario workflows.
 - `examples/countdown.s32`: source-level assembler smoke example.
 - `examples/lab-scenario.yaml`: hardware-only valve MMIO inventory with no actions or scenario behavior.
-- `examples/full-scenario.yaml`: full scenario compiler and runtime smoke fixture.
+- `crates/sentinel-scenario/src/test-scenario.yaml`: internal full-schema compiler fixture.
 - `examples/valve-controller.s32`: commented firmware that owns the demo's OPEN, work-loop, and CLOSED action sequence.
 - `docs/safety-model.md`: claims, invariant families, containment, evidence.
 - `docs/threat-model.md`: assets, untrusted boundaries, abuse cases, controls.

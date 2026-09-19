@@ -18,6 +18,6 @@ capabilities. A request remains subject to the independent deterministic safety
 and output-gating boundary; the lab runner does not grant direct physical output
 authority.
 
-`examples/lab-scenario.yaml` is the canonical hardware-only example.
-`examples/full-scenario.yaml` remains the full `sentinel.scenario/v0` compiler
-fixture for policy, phase, dynamics, and fault tests.
+`examples/lab-scenario.yaml` is the canonical hardware-only example. The full
+`sentinel.scenario/v0` document used by compiler tests is an internal crate
+fixture and is not shipped as a runnable example.
