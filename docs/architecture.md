@@ -43,9 +43,9 @@ AI findings, user input, scenario source, firmware source, and the network are o
 | `sentinel-app` | Process entry points, orchestration, NDJSON, dashboard and Studio | UI failure cannot affect essential control |
 
 `sentinel-core` and `sentinel-app` are implemented workspace members and pass
-the QNX cross-build. The core currently contains ISA types, canonical
-decode/encode, cycle metadata, and the assembler. The other rows remain planned
-boundaries.
+the QNX cross-build. The core contains ISA types, canonical decode/encode,
+source assembly, sparse memory and manifest types, and the reference
+interpreter. The other rows remain planned boundaries.
 
 ## Runtime separation
 
@@ -57,7 +57,16 @@ OpenAI is a development test backend used to exercise the same checker contract 
 
 ## S32 machine boundary
 
-S32 has 32 general registers (`R0` is hardwired to zero), `HI`, `LO`, `PC`, fixed 32-bit little-endian instructions, no delay slots, deterministic virtual cycles, and a sparse 32-bit address space split into program, data, stack, telemetry, commands, feedback, supervisor, and protected safety regions. The accepted exact encoding is in `docs/s32-isa.md`; decode, encode, assembly, and cycle metadata are implemented in `sentinel-core`.
+S32 has 32 general registers (`R0` is hardwired to zero), `HI`, `LO`, `PC`, fixed 32-bit little-endian instructions, no delay slots, deterministic virtual cycles, and a sparse 32-bit address space split into program, data, stack, telemetry, commands, feedback, supervisor, and protected safety regions. The accepted exact encoding is in `docs/s32-isa.md`; decode, encode, assembly, execution, trap precedence, memory permissions, manifest capabilities, and cycle budgets are implemented in `sentinel-core`.
+
+The VM accepts explicitly constructed, non-overlapping memory slots and a
+validated image manifest. Region type limits the permissions a slot may expose;
+the manifest must separately grant each ordinary data, stack, telemetry,
+request, feedback, or supervisor access. Program reads and instruction fetches
+use the validated program mapping. Safety-control accesses always trap for
+ordinary firmware. The current `sentinel-app run` command is a bounded lab
+harness with a program mapping and a 64 KiB stack only; scenario compilation
+will supply MMIO slots and capabilities later.
 
 ## Scenario boundary
 

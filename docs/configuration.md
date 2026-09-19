@@ -1,6 +1,6 @@
 # Configuration contract
 
-Configuration handling is scheduled for implementation with the relevant runtime tasks. This document fixes the intended boundary without claiming an implemented parser.
+Configuration handling is scheduled for implementation with the relevant runtime tasks. This document fixes the intended boundary without claiming a general configuration parser. The current `sentinel-app run` lab harness accepts its required positive virtual-cycle budget as a positional command-line argument; it does not yet read `S32_VIRTUAL_CYCLE_BUDGET` from the environment or a configuration file.
 
 Precedence will be command-line argument, environment variable, versioned configuration file, then documented default. Safety-relevant ambiguity, invalid values, unknown enum variants, and numeric overflow must fail closed. Scenario-specific channel definitions, pressure bands, timeouts, and safe states belong in the compiled scenario and cannot be overridden by process environment.
 

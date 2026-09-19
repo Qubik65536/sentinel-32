@@ -10,9 +10,11 @@ This is a safety-oriented prototype and educational demonstration. It is not cer
 
 The Rust workspace now contains `sentinel-core` and `sentinel-app`.
 `sentinel-core` implements typed S32 instruction decoding, canonical encoding,
-reserved-field validation, architectural cycle costs, and source assembly. The
-app exposes source checking, assembly, and instruction decoding. Interpreter
-execution is the next S32 implementation slice.
+source assembly, and the reference interpreter. The interpreter validates image
+manifests and sparse mappings, enforces region permissions and manifest
+capabilities, executes the complete S32 v0 instruction set, and applies atomic
+traps and deterministic virtual-cycle budgets. The app exposes checking,
+assembly, decoding, and an end-to-end lab runner.
 
 The QNX SDP 8.0 Build 14 toolchain cross-builds the workspace for
 `aarch64-unknown-nto-qnx800`, and the operator reports successful Raspberry Pi
@@ -40,12 +42,20 @@ Check, inspect, or emit the included assembly example with:
 cargo run -p sentinel-app -- check examples/countdown.s32
 cargo run -p sentinel-app -- assemble examples/countdown.s32
 cargo run -p sentinel-app -- assemble examples/countdown.s32 countdown.bin
+cargo run -p sentinel-app -- run examples/countdown.s32 9
 ```
 
 The assembler supports all v0 instructions, labels, comments, `SP`/`FP`/`RA`,
 decimal/hex/binary literals, checked symbol expressions, `.entry`, `.word`,
 `.zero`, and the canonical `NOP`, `MOVE`, `B`, `RET`, `LI`, and `LA`
 pseudo-instructions.
+
+The `run` command requires a positive virtual-cycle budget. Its lab manifest
+maps the assembled program read/execute and provides one 64 KiB read/write
+stack capability; it grants no data or MMIO capabilities. The countdown should
+halt after nine instructions with nine cycles, `PC=0x00000014`, and `R1=0`.
+Target build, transfer, execution, and evidence-capture instructions are in the
+[development guide](docs/development.md#vm-001-raspberry-pi-5-test).
 
 ## Repository guide
 

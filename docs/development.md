@@ -83,10 +83,80 @@ cargo +qnx800 build --workspace \
   --target aarch64-unknown-nto-qnx800 --release
 ```
 
-The resulting source-assembler-enabled `sentinel-app` is an AArch64 ELF64 PIE
-using `/usr/lib/ldqnx-64.so.2`. Its current SHA-256 is
-`4cbd03223ed4c0f5bc2649faa2c2b281bb2b49febd1a5417fa4fd992d7eacae3`.
+The current interpreter-enabled `sentinel-app` is an AArch64 ELF64 PIE using
+`/usr/lib/ldqnx-64.so.2`. Its SHA-256 on 2026-09-19 is
+`7ac82a528974f75ea56e6ac4378b4029e7e9da3f8956a82d147c072d1d91fab4`.
 This result covers cross-compilation and linking, not target execution.
+
+## VM-001 Raspberry Pi 5 test
+
+Build from a Bash shell on the licensed development host. The QNX environment
+script deliberately rejects other shells:
+
+```sh
+bash
+source /var/home/qubik65536/qnx800/qnxsdp-env.sh
+cargo +qnx800 build --workspace \
+  --target aarch64-unknown-nto-qnx800 --release
+file target/aarch64-unknown-nto-qnx800/release/sentinel-app
+sha256sum target/aarch64-unknown-nto-qnx800/release/sentinel-app
+```
+
+For the current tree, `file` must identify an AArch64 QNX PIE with interpreter
+`/usr/lib/ldqnx-64.so.2`, and the expected SHA-256 is
+`7ac82a528974f75ea56e6ac4378b4029e7e9da3f8956a82d147c072d1d91fab4`.
+If the source changes, record the new tested commit and hash instead of expecting
+this value.
+
+Copy both the executable and source fixture to the Pi using the operator's SSH
+account and private address. Do not put either value in the repository:
+
+```sh
+scp target/aarch64-unknown-nto-qnx800/release/sentinel-app \
+  <QNX_USER>@<PI_ADDRESS>:/tmp/sentinel-app
+scp examples/countdown.s32 \
+  <QNX_USER>@<PI_ADDRESS>:/tmp/countdown.s32
+ssh <QNX_USER>@<PI_ADDRESS>
+```
+
+On the Pi, record the target image identity, run the positive case, and capture
+its exit status:
+
+```sh
+uname -a
+chmod 755 /tmp/sentinel-app
+/tmp/sentinel-app
+/tmp/sentinel-app run /tmp/countdown.s32 9
+echo $?
+```
+
+The identity command should print `sentinel-app s32-isa-v0`. The run's first
+line must be exactly:
+
+```text
+status=halted steps=9 cycles=9 pc=0x00000014 hi=0x00000000 lo=0x00000000
+```
+
+The register dump must show `R01=0x00000000` and `R29=0x20010000`, and the exit
+status must be `0`. Then test that the cycle budget fails closed before the
+ninth instruction:
+
+```sh
+/tmp/sentinel-app run /tmp/countdown.s32 8
+echo $?
+```
+
+Expected stderr and exit status are:
+
+```text
+error: cycle budget exceeded: cycles=8, next_cost=1, budget=8
+2
+```
+
+Record the date, source commit, binary SHA-256, `uname -a` output, exact transfer
+and execution commands, full positive output, both exit statuses, and whether
+the device was a Raspberry Pi 5. Remove the two `/tmp` files after the evidence
+is captured if the target should not retain test artifacts.
 
 ## Required BUILD-001 evidence
 

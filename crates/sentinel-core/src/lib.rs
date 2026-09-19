@@ -3,6 +3,7 @@
 use core::fmt;
 
 pub mod assembler;
+pub mod vm;
 
 pub const ISA_ID: &str = "s32-isa-v0";
 

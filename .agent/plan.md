@@ -67,13 +67,17 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 
 ### VM-001 — Implement the reference interpreter
 
-- **Category / status:** VM / planned
+- **Category / status:** VM / blocked
 - **Dependencies:** ISA-001, BOOT-002
 - **Description:** Execute S32 bit-exactly with region/capability enforcement and deterministic cycle accounting.
 - **Acceptance:** Every instruction and trap matches ISA vectors; `R0`, `HI`, `LO`, `PC`, signed overflow, division, alignment, permissions, execute targets, stack bounds, MMIO, halt, and budgets are tested; decoder never panics for arbitrary words; execution cannot index outside mapped storage; no unsafe code; host checks and QNX cross-build pass.
-- **Progress:** Typed decoding, reserved/illegal rejection, canonical re-encoding,
-  and cycle-cost metadata are implemented without unsafe code. Execution state,
-  memory, traps, and instruction effects remain.
+- **Progress:** The functional acceptance criteria are implemented without
+  dependencies or unsafe code: validated reset, sparse slots, region
+  permissions, manifest capabilities, full S32 v0 execution, atomic typed
+  traps, and deterministic cycle budgets. Host fmt, strict clippy, all 32 tests,
+  countdown CLI execution, and the QNX workspace release cross-build pass.
+  Formal completion waits on the target-side evidence dependency in `BOOT-002`;
+  run the current artifact using the `docs/development.md` VM-001 procedure.
 
 ### VM-002 — Implement versioned tracing and deterministic replay
 

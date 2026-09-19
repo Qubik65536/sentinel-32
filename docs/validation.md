@@ -49,15 +49,19 @@ The OpenAI test backend and hackathon `llama.cpp` backend consume the same local
 
 ## Current validation record
 
-On 2026-09-19, the S32 decode/encode workspace passed `cargo fmt --check`,
+On 2026-09-19, the interpreter-enabled workspace passed `cargo fmt --check`,
 `cargo clippy --workspace --all-targets -- -D warnings`, and
-`cargo test --workspace`. Thirteen tests cover all 50 golden decoder/encoder
-round trips, all 50 source-level instruction encodings, labels, pseudo-ops,
-directives, symbol expressions, diagnostics, illegal and reserved encodings,
-field-overflow rejection, cycle costs, representative arbitrary decoder inputs,
-and CLI word parsing. The `check` and `assemble` commands were also exercised on
-`examples/countdown.s32`, including binary output and an unknown-symbol failure.
-A clean QNX SDP 8.0 Build 14 workspace cross-build for
-`aarch64-unknown-nto-qnx800` passed. The operator reports that the earlier seed
-ran on the Raspberry Pi 5; exact target evidence and execution of the new app
-remain open.
+`cargo test --workspace`. Thirty-two tests cover all 50 golden decoder/encoder and
+source-assembly vectors; assembler syntax and failures; every interpreter
+operation family; signed and unsigned arithmetic; branch, jump, and link
+behavior; reset and `R0`; sparse mappings, permissions, capabilities, and stack
+bounds; stable trap classes and precedence; atomic fault behavior; full-cost
+cycle-budget refusal; and end-to-end countdown assembly and execution.
+
+The host `run examples/countdown.s32 9` case halts after nine steps and cycles
+with `PC=0x00000014` and `R1=0`. Budget 8 is rejected before `HALT` with exit
+code 2. A clean QNX SDP 8.0 Build 14 workspace release cross-build for
+`aarch64-unknown-nto-qnx800` passed and produced an AArch64 QNX PIE with SHA-256
+`7ac82a528974f75ea56e6ac4378b4029e7e9da3f8956a82d147c072d1d91fab4`.
+Execution of this interpreter-enabled artifact on the Raspberry Pi 5 remains
+to be captured; the exact operator procedure is in `docs/development.md`.
