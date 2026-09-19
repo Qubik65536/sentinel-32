@@ -1,0 +1,11 @@
+/target
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+
+# Editor and operating-system state
+.DS_Store
+*.swp
+*.swo

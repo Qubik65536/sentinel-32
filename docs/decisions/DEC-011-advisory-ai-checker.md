@@ -1,0 +1,6 @@
+# DEC-011: Limit AI to advisory written-rule checks
+
+- **Status:** Accepted
+- **Decision:** The only AI function is to compare a bounded, identified snapshot of current system state with a versioned, hash-identified set of written safety rules and return structured advisory findings. OpenAI is used only for development testing and evaluation. The hackathon deployment runs the checker client and a pinned local GGUF model served by `llama.cpp` together on a companion host, with the model server bound to loopback and remote-provider fallback disabled.
+- **Consequences:** AI does not generate or repair firmware, scenarios, policies, tests, or commands. Findings cite rule IDs and state fields but cannot approve a state, contribute deterministic evidence, alter safety policy, activate firmware, silence alarms, or control outputs. Deterministic invariants remain the enforcement source of truth. Backend/model/rule/prompt/snapshot identities are recorded as finding provenance. The setup guide must make local model acquisition, hash verification, server launch, OpenAI test configuration, and deployment topology reproducible.
+- **Revisit when:** A different backend is needed or written-rule findings are proposed for an authoritative path. Any authority change requires explicit human safety review.
