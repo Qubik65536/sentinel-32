@@ -1,56 +1,91 @@
-# This firmware owns the complete action sequence for the demonstration.
-# The YAML declares that a fill-valve request register exists and defines its
-# value encoding. It does not tell this program when to open or close anything.
+# Tank loading controller.
 #
-# Launch-event sequence implemented below:
-#   1. Request that the propellant fill valve open.
-#   2. Perform a short, bounded loading-work loop inside the controller.
-#   3. Request that the fill valve close.
-#   4. Halt after the final request.
+# The YAML only declares that the tank instruments and two valve request
+# registers exist. This firmware owns the complete operating sequence:
 #
-# The loop is only a visible example of control flow. Its three iterations are
-# not real elapsed time, a physical model, or a proven launch timing value.
-# A production controller would decide from declared sensor/feedback registers
-# and independent deterministic safety policy would still gate every request.
+#   1. Open the inlet and keep the outlet closed until pressure reaches 50.000.
+#   2. Close both valves and hold that pressure for 10 simulated seconds.
+#   3. Keep the inlet closed and open the outlet until pressure reaches zero.
+#   4. Close both valves.
 #
-# YAML-generated memory map used here:
-#   S32_ACTUATOR_FILL_VALVE  write-only request register
+# `tank-run` invokes this bounded controller once per simulated second.
+# The simulated tank changes pressure between invocations in response to the
+# requests. The controller reads the new instruments on its next invocation.
 #
-# valve_state values come from the YAML enum order:
-#   0 = closed
-#   1 = open
+# YAML-generated MMIO symbols:
+#   S32_TELEMETRY_TANK_PRESSURE          current tank pressure, read-only
+#   S32_TELEMETRY_SECONDS_SINCE_INLET_CLOSED  inlet-closed seconds, read-only
+#   S32_ACTUATOR_INLET_VALVE             inlet request, write-only
+#   S32_ACTUATOR_OUTLET_VALVE            outlet request, write-only
 #
-# Registers used:
-#   R2 = remaining iterations in this demonstration's loading-work loop
-#   R4 = valve request value
-#   R5 = address of the fill-valve request register
+# Valve values are defined by YAML enum order: closed=0 and open=1.
+# Pressure uses integer milli-units, so 50000 means 50.000 pressure units.
+#
+# Registers:
+#   R1  = current pressure
+#   R2  = seconds already held at target
+#   R3  = constant or comparison input
+#   R4  = comparison result
+#   R5  = inlet request
+#   R6  = outlet request
+#   R10 = pressure-register address
+#   R11 = hold-seconds-register address
+#   R12 = inlet-request address
+#   R13 = outlet-request address
 
 .entry start
 
 start:
-    # Locate the hardware request register declared in YAML. The assembly uses
-    # its generated name, so no numeric hardware address is embedded here.
-    LA   R5, S32_ACTUATOR_FILL_VALVE
+    # Resolve every hardware address from the YAML-generated symbol table.
+    LA   R10, S32_TELEMETRY_TANK_PRESSURE
+    LA   R11, S32_TELEMETRY_SECONDS_SINCE_INLET_CLOSED
+    LA   R12, S32_ACTUATOR_INLET_VALVE
+    LA   R13, S32_ACTUATOR_OUTLET_VALVE
 
-    # Launch action 1: request OPEN so simulated propellant loading may begin.
-    LI   R4, 1
-    SW   R4, 0(R5)
+    # Sample the two read-only instruments for this control cycle.
+    LW   R1, 0(R10)
+    LW   R2, 0(R11)
 
-    # The assembly program, rather than YAML, chooses how long its demonstration
-    # work lasts. R2 starts at 3 and is reduced once on each pass.
-    LI   R2, 3
+    # Once ten hold seconds have completed, stay in the unloading part of the
+    # sequence even though pressure falls below the original loading target.
+    SLTI R4, R2, 10
+    BEQ  R4, R0, unload
 
-loading_work:
-    # Do one unit of controller work. If work remains, BNE sends execution back
-    # to loading_work. When R2 becomes zero, execution continues below.
-    ADDIU R2, R2, -1
-    BNE   R2, R0, loading_work
+    # Before the hold completes, load whenever pressure is below 50.000.
+    LI   R3, 50000
+    SLT  R4, R1, R3
+    BNE  R4, R0, load
 
-loading_complete:
-    # Launch action 2: the controller has completed its local work, so request
-    # CLOSED before any later launch operation could occur.
-    LI   R4, 0
-    SW   R4, 0(R5)
+hold:
+    # Target pressure has been reached but ten seconds have not elapsed.
+    # Closing both valves requests that the tank retain its pressure.
+    LI   R5, 0
+    LI   R6, 0
+    B    write_requests
 
-    # The complete OPEN -> work -> CLOSED sequence occurred in this one run.
+load:
+    # Pressure is below target: request inlet OPEN and outlet CLOSED.
+    LI   R5, 1
+    LI   R6, 0
+    B    write_requests
+
+unload:
+    # The ten-second hold is complete. If pressure remains above zero, request
+    # inlet CLOSED and outlet OPEN so the tank unloads.
+    SLTI R4, R1, 1
+    BNE  R4, R0, stopped
+    LI   R5, 0
+    LI   R6, 1
+    B    write_requests
+
+stopped:
+    # The tank has unloaded to zero. Finish with both valves closed.
+    LI   R5, 0
+    LI   R6, 0
+
+write_requests:
+    # Publish both decisions for this simulated second, then end the bounded
+    # controller invocation. The next invocation receives updated instruments.
+    SW   R5, 0(R12)
+    SW   R6, 0(R13)
     HALT

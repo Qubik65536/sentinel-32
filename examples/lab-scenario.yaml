@@ -1,36 +1,52 @@
-# Hardware inventory used by valve-controller.s32.
+# Hardware inventory for the tank controller in valve-controller.s32.
 #
-# This file only says which hardware registers exist, their value types, and
-# their reset values. It does not describe a launch sequence, timing, phase,
-# transition, rule, valve movement, or other action. The S32 assembly program
-# decides when to request OPEN and CLOSED.
+# This file only declares hardware existence, register types, ranges, and reset
+# values. It does not contain the pressure target, ten-second hold requirement,
+# valve sequence, transitions, or actions. Those decisions are all in assembly.
 
 schema: sentinel.hardware/v0
-id: launch_pad_hardware
+id: tank_hardware
 publication: 1
 
-# Enum order defines the value stored in the 32-bit MMIO register:
-# closed = 0, open = 1.
+# Both physical valves use the same electrical command encoding.
 types:
   valve_state:
     variants: [closed, open]
 
-# No sensor is needed by this small firmware demonstration.
-telemetry: {}
+# Read-only instruments attached to the tank.
+telemetry:
+  tank_pressure:
+    # Integer milli-pressure units: 50000 means 50.000 pressure units.
+    type: i32
+    unit: pressure_milli
+    range: {min: 0, max: 100000}
+    initial: 0
+  seconds_since_inlet_closed:
+    # Whole simulated seconds measured since the inlet was last closed.
+    type: i32
+    unit: count
+    range: {min: 0, max: 1000000}
+    initial: 0
 
-# A write-only command-request register for the propellant fill valve.
-# `initial` is the register's reset value; it does not schedule an action.
+# Write-only request registers. The controller independently commands the
+# inlet and outlet valves.
 actuators:
-  fill_valve:
+  inlet_valve:
+    type: valve_state
+    unit: none
+    initial: closed
+  outlet_valve:
     type: valve_state
     unit: none
     initial: closed
 
-# A separate read-only register representing physical valve position.
-# This demo declares it so firmware can be extended to inspect hardware
-# feedback. The YAML does not change its value.
+# Read-only physical valve-position switches.
 feedback:
-  fill_valve_position:
+  inlet_valve_position:
+    type: valve_state
+    unit: none
+    initial: closed
+  outlet_valve_position:
     type: valve_state
     unit: none
     initial: closed

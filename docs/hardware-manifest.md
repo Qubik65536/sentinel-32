@@ -21,3 +21,11 @@ authority.
 `examples/lab-scenario.yaml` is the canonical hardware-only example. The full
 `sentinel.scenario/v0` document used by compiler tests is an internal crate
 fixture and is not shipped as a runnable example.
+
+The app's `tank-run` demonstration supplies a deterministic lab plant outside
+the YAML contract. One controller invocation represents one simulated second.
+An open inlet raises pressure by 10000 milli-units, an open outlet lowers it by
+10000, and closed valves retain pressure. A hardware timer reports seconds since
+the inlet was closed. These are simulated physical responses and measurements,
+not controller actions. The pressure target, ten-second decision, and every
+inlet/outlet request remain in `examples/valve-controller.s32`.

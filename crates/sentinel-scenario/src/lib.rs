@@ -31,7 +31,7 @@ mod tests {
     fn compiles_hardware_only_manifest_to_mmio_symbols() {
         let compilation =
             compile_hardware(HARDWARE_FIXTURE).unwrap_or_else(|error| panic!("{error}"));
-        assert_eq!(compilation.bundle.scenario_id, "launch_pad_hardware");
+        assert_eq!(compilation.bundle.scenario_id, "tank_hardware");
         assert_eq!(
             compilation
                 .bundle
@@ -40,14 +40,18 @@ mod tests {
                 .map(|entry| (entry.qualified_id.as_str(), entry.address))
                 .collect::<Vec<_>>(),
             vec![
-                ("actuator.fill_valve", 0x5000_0000),
-                ("feedback.fill_valve_position", 0x6000_0000),
+                ("actuator.inlet_valve", 0x5000_0000),
+                ("actuator.outlet_valve", 0x5000_0004),
+                ("feedback.inlet_valve_position", 0x6000_0000),
+                ("feedback.outlet_valve_position", 0x6000_0004),
+                ("telemetry.seconds_since_inlet_closed", 0x4000_0000),
+                ("telemetry.tank_pressure", 0x4000_0004),
             ]
         );
         assert!(
             compilation
                 .symbols
-                .contains(".equ S32_ACTUATOR_FILL_VALVE, 0x50000000")
+                .contains(".equ S32_ACTUATOR_INLET_VALVE, 0x50000000")
         );
     }
 

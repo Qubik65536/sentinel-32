@@ -69,10 +69,11 @@ with `PC=0x00000014` and `R1=0`. Budget 8 is rejected before `HALT` with exit
 code 2. A prior clean QNX SDP 8.0 Build 14 workspace release cross-build for
 `aarch64-unknown-nto-qnx800` produced an AArch64 QNX PIE with SHA-256
 `50a2c8546e1f256f85d7429b7f1b3e68409559fbc13cdcab6b88cb6824146aae`.
-The current hardware manifest compiles to bundle hash
-`e022adf0b5591401bb229cf0b79b3772aa142cacf9e823167ea93015b8d2e196`.
-Its host run records `open` followed by `closed` and halts after 17 instructions
-and 19 virtual cycles. The current QNX link was attempted but the local QNX
+The current tank hardware manifest compiles to bundle hash
+`23de1aff43b7a942198f2cf5f5b04414a15e5b90a9e64145caa02c0d9677b7f8`.
+Its host run fills to 50000, holds that pressure for ten simulated seconds,
+unloads to zero, and finishes with both valves closed. The current QNX link was
+attempted but the local QNX
 license lock timed out, so the earlier binary hash is not evidence for this
 source. QNX cross-build and Raspberry Pi 5 execution remain to be captured; the
 exact operator procedure is in `docs/development.md`.

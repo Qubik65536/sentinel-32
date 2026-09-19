@@ -242,26 +242,32 @@ echo $?
 echo $?
 ```
 
-Both commands must exit `0` and report two MMIO entries. Then run the
+Both commands must exit `0` and report six MMIO entries. Then run the
 assembly-owned action sequence against those YAML-declared registers:
 
 ```sh
-/data/home/qnxuser/sentinel-32/release/sentinel-app hardware-run \
+/data/home/qnxuser/sentinel-32/release/sentinel-app tank-run \
   /data/home/qnxuser/sentinel-32/examples/lab-scenario.yaml \
-  /data/home/qnxuser/sentinel-32/examples/valve-controller.s32 1 100
+  /data/home/qnxuser/sentinel-32/examples/valve-controller.s32 21 100
 echo $?
 ```
 
-The MMIO preamble must map `actuator.fill_valve` to `0x50000000` and
-`feedback.fill_valve_position` to `0x60000000`. The run line must show
-`actions=[actuator.fill_valve=open->actuator.fill_valve=closed]` and the final
-request must be `closed`. This proves the YAML only supplied hardware existence
-and encoding while the assembly issued both actions. The command must exit `0`.
+The MMIO preamble must map inlet and outlet requests to `0x50000000` and
+`0x50000004`, their feedback to `0x60000000` and `0x60000004`, and the two
+telemetry registers to `0x40000000` and `0x40000004`. Verify these stages:
+
+- seconds 1 through 5: inlet open, outlet closed, pressure rises to 50000;
+- seconds 6 through 15: both closed, pressure remains 50000, inlet-closed time reaches 10;
+- seconds 16 through 20: inlet closed, outlet open, pressure falls to zero;
+- second 21: both valves closed at zero pressure.
+
+This proves the YAML only supplied hardware existence and encoding while the
+assembly selected every action. The command must exit `0`.
 
 Also verify fail-closed argument handling:
 
 ```sh
-/data/home/qnxuser/sentinel-32/release/sentinel-app hardware-run \
+/data/home/qnxuser/sentinel-32/release/sentinel-app tank-run \
   /data/home/qnxuser/sentinel-32/examples/lab-scenario.yaml \
   /data/home/qnxuser/sentinel-32/examples/valve-controller.s32 0 100
 echo $?

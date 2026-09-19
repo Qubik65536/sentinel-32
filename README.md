@@ -73,14 +73,15 @@ Compile the hardware inventory and run the assembly-owned action sequence with:
 cargo run -p sentinel-app -- hardware-check examples/lab-scenario.yaml
 cargo run -p sentinel-app -- hardware-compile \
   examples/lab-scenario.yaml bundle.json symbols.inc
-cargo run -p sentinel-app -- hardware-run \
-  examples/lab-scenario.yaml examples/valve-controller.s32 1 100
+cargo run -p sentinel-app -- tank-run \
+  examples/lab-scenario.yaml examples/valve-controller.s32 21 100
 ```
 
 The YAML contains hardware existence, value types, and reset values only. The
-firmware obtains its actuator-request address from the compiled inventory and
-performs the complete OPEN, bounded-work-loop, CLOSED sequence. The runner
-prints the MMIO writes in execution order. The
+firmware obtains pressure, hold-time, inlet, and outlet addresses from the
+compiled inventory. It fills to 50.000 pressure units, holds for ten simulated
+seconds, unloads to zero, and closes both valves. The runner prints each
+second's readings and MMIO writes in execution order. The
 [development guide](docs/development.md#scen-002-raspberry-pi-5-test) gives the
 equivalent Raspberry Pi 5 checks and expected output.
 

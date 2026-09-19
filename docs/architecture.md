@@ -69,7 +69,7 @@ use the validated program mapping. Safety-control accesses always trap for
 ordinary firmware. The current `sentinel-app run` command is a bounded lab
 harness with a program mapping and a 64 KiB stack only; scenario compilation
 supplies read-only telemetry/feedback slots and write-only actuator-request
-slots to the `hardware-run` lab harness. Its hardware YAML declares only
+slots to the `tank-run` lab harness. Its hardware YAML declares only
 register existence, types, and reset values. Firmware receives the addresses
 compiled from that inventory, and the assembly owns the demonstrated action
 sequence. The manifest grants exactly those MMIO capabilities.

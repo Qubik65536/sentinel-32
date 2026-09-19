@@ -16,6 +16,7 @@ use sentinel_scenario::{
 
 const LAB_STACK_BASE: u32 = 0x2000_0000;
 const LAB_STACK_SIZE: usize = 64 * 1024;
+const TANK_PRESSURE_STEP: i32 = 10_000;
 
 struct FirmwareRun {
     steps: u64,
@@ -150,7 +151,7 @@ fn run() -> Result<(), String> {
             }
             Ok(())
         }
-        [command, scenario, firmware, ticks, cycle_budget] if command == "hardware-run" => {
+        [command, scenario, firmware, ticks, cycle_budget] if command == "tank-run" => {
             run_scenario_firmware(
                 scenario,
                 firmware,
@@ -186,7 +187,7 @@ fn run() -> Result<(), String> {
             Ok(())
         }
         _ => Err(
-            "usage: sentinel-app [decode <word> | check <source.s32> | assemble <source.s32> [output.bin] | run <source.s32> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | hardware-run <hardware.yaml> <firmware.s32> <runs> <cycle-budget-per-run> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks>]"
+            "usage: sentinel-app [decode <word> | check <source.s32> | assemble <source.s32> [output.bin] | run <source.s32> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | tank-run <hardware.yaml> <firmware.s32> <seconds> <cycle-budget-per-second> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks>]"
                 .to_owned(),
         ),
     }
@@ -258,7 +259,7 @@ fn run_scenario_firmware(
     }
 
     println!(
-        "hardware-firmware hardware={} publication={} bundle={} firmware={} requested_runs={} cycle_budget_per_run={}",
+        "tank-firmware hardware={} publication={} bundle={} firmware={} requested_seconds={} cycle_budget_per_second={}",
         compilation.bundle.scenario_id,
         compilation.bundle.publication,
         compilation.bundle_hash,
@@ -283,15 +284,21 @@ fn run_scenario_firmware(
 
     let bundle = compilation.bundle;
     let runtime = Runtime::new(bundle.clone());
+    let mut hardware_values = runtime.state().values.clone();
     for run_number in 1..=ticks {
-        let run = execute_firmware_tick(&assembly, &bundle, &runtime, cycle_budget)?;
+        let readings = tank_readings(&hardware_values)?;
+        let run = execute_firmware_tick(&assembly, &bundle, &hardware_values, cycle_budget)?;
+        advance_tank_hardware(&mut hardware_values, &run.final_requests)?;
+        let next_readings = tank_readings(&hardware_values)?;
         println!(
-            "run={} firmware_status=halted firmware_steps={} firmware_cycles={} actions={} final_requests={}",
+            "second={} firmware_status=halted firmware_steps={} firmware_cycles={} readings={} actions={} final_requests={} next_readings={}",
             run_number,
             run.steps,
             run.cycles,
+            format_values(&readings),
             format_action_values(&run.actions),
-            format_values(&run.final_requests)
+            format_values(&run.final_requests),
+            format_values(&next_readings)
         );
     }
     Ok(())
@@ -300,7 +307,7 @@ fn run_scenario_firmware(
 fn execute_firmware_tick(
     assembly: &Assembly,
     bundle: &CompiledBundle,
-    runtime: &Runtime,
+    hardware_values: &BTreeMap<String, ScalarValue>,
     cycle_budget: u64,
 ) -> Result<FirmwareRun, String> {
     let mut slots = vec![
@@ -324,11 +331,9 @@ fn execute_firmware_tick(
         write: true,
     }];
     for entry in &bundle.mmio {
-        let value = runtime
-            .state()
-            .values
+        let value = hardware_values
             .get(&entry.qualified_id)
-            .ok_or_else(|| format!("runtime value `{}` is missing", entry.qualified_id))?;
+            .ok_or_else(|| format!("hardware value `{}` is missing", entry.qualified_id))?;
         let permissions = match entry.kind {
             AllocationKind::ActuatorRequest => Permissions::WRITE,
             AllocationKind::Telemetry | AllocationKind::Feedback | AllocationKind::Supervisor => {
@@ -406,6 +411,94 @@ fn execute_firmware_tick(
         final_requests: requests,
         actions,
     })
+}
+
+fn tank_readings(
+    hardware_values: &BTreeMap<String, ScalarValue>,
+) -> Result<BTreeMap<String, ScalarValue>, String> {
+    [
+        "telemetry.tank_pressure",
+        "telemetry.seconds_since_inlet_closed",
+    ]
+    .into_iter()
+    .map(|reference| {
+        hardware_values
+            .get(reference)
+            .cloned()
+            .map(|value| (reference.to_owned(), value))
+            .ok_or_else(|| format!("tank hardware is missing `{reference}`"))
+    })
+    .collect()
+}
+
+fn advance_tank_hardware(
+    hardware_values: &mut BTreeMap<String, ScalarValue>,
+    requests: &BTreeMap<String, ScalarValue>,
+) -> Result<(), String> {
+    let inlet_open = valve_request_is_open(requests, "actuator.inlet_valve")?;
+    let outlet_open = valve_request_is_open(requests, "actuator.outlet_valve")?;
+    if inlet_open && outlet_open {
+        return Err("tank controller requested inlet and outlet open together".to_owned());
+    }
+
+    let pressure = match hardware_values.get("telemetry.tank_pressure") {
+        Some(ScalarValue::Signed(value)) => *value,
+        Some(_) => return Err("tank pressure is not an i32 value".to_owned()),
+        None => return Err("tank hardware is missing `telemetry.tank_pressure`".to_owned()),
+    };
+    let inlet_closed_seconds = match hardware_values.get("telemetry.seconds_since_inlet_closed") {
+        Some(ScalarValue::Signed(value)) => *value,
+        Some(_) => return Err("inlet-closed timer is not an i32 value".to_owned()),
+        None => {
+            return Err(
+                "tank hardware is missing `telemetry.seconds_since_inlet_closed`".to_owned(),
+            );
+        }
+    };
+
+    let next_pressure = if inlet_open {
+        pressure.saturating_add(TANK_PRESSURE_STEP).min(100_000)
+    } else if outlet_open {
+        pressure.saturating_sub(TANK_PRESSURE_STEP).max(0)
+    } else {
+        pressure
+    };
+    let next_inlet_closed_seconds = if inlet_open {
+        0
+    } else {
+        inlet_closed_seconds.saturating_add(1)
+    };
+
+    hardware_values.insert(
+        "telemetry.tank_pressure".to_owned(),
+        ScalarValue::Signed(next_pressure),
+    );
+    hardware_values.insert(
+        "telemetry.seconds_since_inlet_closed".to_owned(),
+        ScalarValue::Signed(next_inlet_closed_seconds),
+    );
+    set_valve_hardware(hardware_values, "inlet_valve", inlet_open);
+    set_valve_hardware(hardware_values, "outlet_valve", outlet_open);
+    Ok(())
+}
+
+fn valve_request_is_open(
+    requests: &BTreeMap<String, ScalarValue>,
+    reference: &str,
+) -> Result<bool, String> {
+    match requests.get(reference) {
+        Some(ScalarValue::Enum(value)) if value == "open" => Ok(true),
+        Some(ScalarValue::Enum(value)) if value == "closed" => Ok(false),
+        Some(ScalarValue::Enum(value)) => Err(format!("invalid valve state `{value}`")),
+        Some(_) => Err(format!("valve request `{reference}` is not an enum")),
+        None => Err(format!("firmware did not write `{reference}`")),
+    }
+}
+
+fn set_valve_hardware(hardware_values: &mut BTreeMap<String, ScalarValue>, id: &str, open: bool) {
+    let value = ScalarValue::Enum(if open { "open" } else { "closed" }.to_owned());
+    hardware_values.insert(format!("actuator.{id}"), value.clone());
+    hardware_values.insert(format!("feedback.{id}_position"), value);
 }
 
 fn scalar_to_word(
@@ -596,7 +689,8 @@ mod tests {
     use sentinel_scenario::{Runtime, ScalarValue, compile_hardware};
 
     use super::{
-        execute_firmware_tick, mmio_symbol, parse_cycle_budget, parse_tick_count, parse_word,
+        advance_tank_hardware, execute_firmware_tick, mmio_symbol, parse_cycle_budget,
+        parse_tick_count, parse_word,
     };
 
     const SCENARIO: &str = include_str!("../../../examples/lab-scenario.yaml");
@@ -624,7 +718,7 @@ mod tests {
     }
 
     #[test]
-    fn firmware_uses_yaml_allocated_mmio_to_request_an_actuator() {
+    fn firmware_loads_holds_and_unloads_the_tank() {
         let compilation = compile_hardware(SCENARIO).unwrap_or_else(|error| panic!("{error}"));
         let symbols = compilation
             .bundle
@@ -635,24 +729,62 @@ mod tests {
         let assembly = assemble_with_symbols(FIRMWARE, 0, &symbols)
             .unwrap_or_else(|diagnostics| panic!("{diagnostics:?}"));
         let runtime = Runtime::new(compilation.bundle.clone());
-        let run = execute_firmware_tick(&assembly, &compilation.bundle, &runtime, 100)
-            .unwrap_or_else(|error| panic!("{error}"));
+        let mut values = runtime.state().values.clone();
+        let mut requests_by_second = Vec::new();
+        for _ in 0..21 {
+            let run = execute_firmware_tick(&assembly, &compilation.bundle, &values, 100)
+                .unwrap_or_else(|error| panic!("{error}"));
+            assert_eq!(run.actions.len(), 2);
+            requests_by_second.push(run.final_requests.clone());
+            advance_tank_hardware(&mut values, &run.final_requests)
+                .unwrap_or_else(|error| panic!("{error}"));
+        }
+
+        for requests in &requests_by_second[0..5] {
+            assert_eq!(
+                requests.get("actuator.inlet_valve"),
+                Some(&ScalarValue::Enum("open".to_owned()))
+            );
+            assert_eq!(
+                requests.get("actuator.outlet_valve"),
+                Some(&ScalarValue::Enum("closed".to_owned()))
+            );
+        }
+        for requests in &requests_by_second[5..15] {
+            assert_eq!(
+                requests.get("actuator.inlet_valve"),
+                Some(&ScalarValue::Enum("closed".to_owned()))
+            );
+            assert_eq!(
+                requests.get("actuator.outlet_valve"),
+                Some(&ScalarValue::Enum("closed".to_owned()))
+            );
+        }
+        for requests in &requests_by_second[15..20] {
+            assert_eq!(
+                requests.get("actuator.inlet_valve"),
+                Some(&ScalarValue::Enum("closed".to_owned()))
+            );
+            assert_eq!(
+                requests.get("actuator.outlet_valve"),
+                Some(&ScalarValue::Enum("open".to_owned()))
+            );
+        }
         assert_eq!(
-            run.final_requests.get("actuator.fill_valve"),
+            requests_by_second[20].get("actuator.inlet_valve"),
             Some(&ScalarValue::Enum("closed".to_owned()))
         );
         assert_eq!(
-            run.actions,
-            vec![
-                (
-                    "actuator.fill_valve".to_owned(),
-                    ScalarValue::Enum("open".to_owned())
-                ),
-                (
-                    "actuator.fill_valve".to_owned(),
-                    ScalarValue::Enum("closed".to_owned())
-                ),
-            ]
+            requests_by_second[20].get("actuator.outlet_valve"),
+            Some(&ScalarValue::Enum("closed".to_owned()))
+        );
+        assert_eq!(
+            values.get("telemetry.tank_pressure"),
+            Some(&ScalarValue::Signed(0))
+        );
+        assert_eq!(
+            values.get("telemetry.seconds_since_inlet_closed"),
+            Some(&ScalarValue::Signed(16))
         );
     }
 }

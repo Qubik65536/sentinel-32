@@ -110,8 +110,9 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
   hashing, clean and stable MMIO allocation, reproducible symbols, all dynamic
   and fault families, deterministic ticks, injection rejection, and an
   end-to-end VM harness where a hardware-only YAML inventory allocates MMIO and
-  firmware owns the ordered OPEN/work/CLOSED actuator sequence. The runner
-  records each typed actuator write. Host validation passes; the latest QNX
+  firmware owns a pressure-controlled fill, ten-second hold, unload, and stop
+  sequence across deterministic simulated seconds. The runner records every
+  typed actuator write and instrument change. Host validation passes; the latest QNX
   link attempt was blocked by a local QNX license-lock timeout. Formal
   completion waits on `BOOT-002` and human review
   of the concrete v0 source forms and source-provenance clarification recorded
