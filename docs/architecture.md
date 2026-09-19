@@ -2,7 +2,9 @@
 
 ## Status
 
-This document records the intended version-0 boundaries. Only the host hello-world package exists today. Component boundaries become implemented facts only when their tasks and tests are complete.
+This document records the version-0 boundaries. `sentinel-core` and
+`sentinel-app` now exist; the remaining crates are introduced only with
+functional content and their corresponding tasks.
 
 ## Trust and data flow
 
@@ -28,7 +30,7 @@ flowchart LR
 
 AI findings, user input, scenario source, firmware source, and the network are outside the trusted computing base. The AI checker has no edge to the assembler, verifier, safety monitor, deployment gate, or output gate. The initial trusted computing base is the S32 decoder/interpreter, memory and capability enforcement, scenario compiler and canonicalization, invariant evaluator, safe-state resolver, output and deployment gates, watchdog, hashing/evidence binding, and the QNX adapter used by those components.
 
-## Planned crates
+## Crate map
 
 | Crate | Responsibility | Key restriction |
 |---|---|---|
@@ -40,7 +42,10 @@ AI findings, user input, scenario source, firmware source, and the network are o
 | `sentinel-ai-check` | Snapshot/rule/finding types, fixtures, test-only OpenAI adapter, local `llama.cpp` adapter, evaluation metadata | Advisory only; no firmware generation, activation, policy, or output-control path |
 | `sentinel-app` | Process entry points, orchestration, NDJSON, dashboard and Studio | UI failure cannot affect essential control |
 
-The crate tree is deferred until `BUILD-001` proves the actual target build path. This avoids committing dependencies or build assumptions that cannot yet be tested on QNX.
+`sentinel-core` and `sentinel-app` are implemented workspace members and pass
+the QNX cross-build. The core currently contains ISA types, canonical
+decode/encode, cycle metadata, and the assembler. The other rows remain planned
+boundaries.
 
 ## Runtime separation
 
@@ -52,7 +57,7 @@ OpenAI is a development test backend used to exercise the same checker contract 
 
 ## S32 machine boundary
 
-S32 has 32 general registers (`R0` is hardwired to zero), `HI`, `LO`, `PC`, fixed 32-bit little-endian instructions, no delay slots, deterministic virtual cycles, and a sparse 32-bit address space split into program, data, stack, telemetry, commands, feedback, supervisor, and protected safety regions. Exact encodings remain unresolved under `ISA-001`; see `docs/s32-isa.md`.
+S32 has 32 general registers (`R0` is hardwired to zero), `HI`, `LO`, `PC`, fixed 32-bit little-endian instructions, no delay slots, deterministic virtual cycles, and a sparse 32-bit address space split into program, data, stack, telemetry, commands, feedback, supervisor, and protected safety regions. The accepted exact encoding is in `docs/s32-isa.md`; decode, encode, assembly, and cycle metadata are implemented in `sentinel-core`.
 
 ## Scenario boundary
 

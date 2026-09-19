@@ -49,4 +49,15 @@ The OpenAI test backend and hackathon `llama.cpp` backend consume the same local
 
 ## Current validation record
 
-On 2026-09-19, the pre-bootstrap host hello-world package passed `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test`. It contains no Sentinel-32 safety functionality and has zero tests. QNX cross-compilation and target execution were unavailable; see `docs/development.md`.
+On 2026-09-19, the S32 decode/encode workspace passed `cargo fmt --check`,
+`cargo clippy --workspace --all-targets -- -D warnings`, and
+`cargo test --workspace`. Thirteen tests cover all 50 golden decoder/encoder
+round trips, all 50 source-level instruction encodings, labels, pseudo-ops,
+directives, symbol expressions, diagnostics, illegal and reserved encodings,
+field-overflow rejection, cycle costs, representative arbitrary decoder inputs,
+and CLI word parsing. The `check` and `assemble` commands were also exercised on
+`examples/countdown.s32`, including binary output and an unknown-symbol failure.
+A clean QNX SDP 8.0 Build 14 workspace cross-build for
+`aarch64-unknown-nto-qnx800` passed. The operator reports that the earlier seed
+ran on the Raspberry Pi 5; exact target evidence and execution of the new app
+remain open.

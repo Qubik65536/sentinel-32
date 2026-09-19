@@ -8,9 +8,17 @@ This is a safety-oriented prototype and educational demonstration. It is not cer
 
 ## Current status
 
-Repository groundwork (`BOOT-001`) is complete. The checked-in Rust program is the pre-existing host hello world; the multi-crate workspace has intentionally not been scaffolded because `BOOT-002` depends on the QNX toolchain spike.
+The Rust workspace now contains `sentinel-core` and `sentinel-app`.
+`sentinel-core` implements typed S32 instruction decoding, canonical encoding,
+reserved-field validation, architectural cycle costs, and source assembly. The
+app exposes source checking, assembly, and instruction decoding. Interpreter
+execution is the next S32 implementation slice.
 
-`BUILD-001` is blocked in this environment. The host has ordinary upstream Rust but no QNX SDP environment, QNX-modified Rust toolchain, `aarch64-unknown-nto-qnx800` target, or accessible QNX 8.0 Raspberry Pi 5. See [development setup](docs/development.md) and the [work plan](.agent/plan.md).
+The QNX SDP 8.0 Build 14 toolchain cross-builds the workspace for
+`aarch64-unknown-nto-qnx800`, and the operator reports successful Raspberry Pi
+5 execution. `BUILD-001` remains open only until exact target-side commands,
+image version, output, and exit status are captured. See
+[development setup](docs/development.md) and the [work plan](.agent/plan.md).
 
 ## Host checks
 
@@ -20,7 +28,24 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-The current program can be run with `cargo run`. It demonstrates only that the host Rust installation works; it is not the Sentinel-32 runtime.
+Decode a word from the accepted S32 ISA with:
+
+```sh
+cargo run -p sentinel-app -- decode 0x00221820
+```
+
+Check, inspect, or emit the included assembly example with:
+
+```sh
+cargo run -p sentinel-app -- check examples/countdown.s32
+cargo run -p sentinel-app -- assemble examples/countdown.s32
+cargo run -p sentinel-app -- assemble examples/countdown.s32 countdown.bin
+```
+
+The assembler supports all v0 instructions, labels, comments, `SP`/`FP`/`RA`,
+decimal/hex/binary literals, checked symbol expressions, `.entry`, `.word`,
+`.zero`, and the canonical `NOP`, `MOVE`, `B`, `RET`, `LI`, and `LA`
+pseudo-instructions.
 
 ## Repository guide
 

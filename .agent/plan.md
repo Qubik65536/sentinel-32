@@ -26,7 +26,10 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 - **Dependencies:** BOOT-001
 - **Description:** Use the licensed QNX-modified Rust compiler on a supported host to build hello world for `aarch64-unknown-nto-qnx800` and execute it on the Raspberry Pi 5.
 - **Acceptance:** Real SDP environment is initialized; actual toolchain is linked with rustup; compiler/Cargo/SDP versions and `rustc --print cfg` are recorded; exact Cargo build succeeds; binary format is inspected; transfer and execution on QNX 8.0/Raspberry Pi 5 succeed; tested commit, image, output, and exit status are recorded without secrets.
-- **Blocker:** This host lacks QNX SDP, the QNX Rust distribution, the qnx800 target, and target-device access. Details are in `docs/development.md`.
+- **Blocker:** The host cross-build now passes and the operator reports that the
+  binary runs on the Pi. Exact target image, transfer/execution commands,
+  captured output, and exit status remain required evidence. Details are in
+  `docs/development.md`.
 
 ### BOOT-002 — Scaffold the Rust workspace
 
@@ -34,22 +37,33 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 - **Dependencies:** BOOT-001, BUILD-001
 - **Description:** Replace the seed package with only the crates justified by the proven architecture and establish host/QNX build configuration.
 - **Acceptance:** Workspace boundaries match `docs/architecture.md`; core crates have no target-only dependency leakage; host check script or documented commands run cleanly; QNX workspace release build passes; `Cargo.lock` is committed; README/context reflect the real tree; no empty placeholder crates or scripts are added.
+- **Progress:** The functional `sentinel-core` and `sentinel-app` crates are
+  scaffolded, and both host checks and the QNX workspace release build pass.
+  Completion remains blocked on the target-side evidence dependency in
+  `BUILD-001`.
 
 ## ISA and VM
 
 ### ISA-001 — Specify S32 ISA v0
 
-- **Category / status:** ISA / ready
+- **Category / status:** ISA / complete (2026-09-19)
 - **Dependencies:** BOOT-001
 - **Description:** Turn `docs/s32-isa.md` into the exact versioned architectural contract.
 - **Acceptance:** All opcode/funct encodings, reserved fields, registers/reset, immediates, branch/jump/PC behavior, `HI/LO`, memory semantics, traps/precedence, cycle costs, assembler grammar/pseudo-ops, and canonical examples are specified; every instruction has golden encode/decode and execution vectors; incompatible-change policy is recorded and human reviewed.
+- **Evidence:** `docs/s32-isa.md`; user human review accepted on 2026-09-19.
 
 ### ISA-002 — Implement the S32 assembler
 
-- **Category / status:** ISA / planned
+- **Category / status:** ISA / blocked
 - **Dependencies:** ISA-001, BOOT-002
 - **Description:** Parse S32 source and produce canonical instruction bytes and diagnostics.
 - **Acceptance:** Labels, comments, registers/aliases, literals, symbolic addresses, directives/pseudo-ops from ISA v0 work; diagnostics include line/column and actionable cause; encodings match all golden vectors; malformed/overflowing/unknown input fails without panic; host checks and QNX cross-build pass.
+- **Progress:** The assembler implementation and CLI satisfy the functional
+  acceptance criteria: all real instructions and golden vectors, labels,
+  comments, aliases, checked literals/expressions, symbolic branches/jumps,
+  directives, pseudo-ops, bounded output, and stable source diagnostics are
+  covered by host tests and the QNX cross-build. Formal completion waits on its
+  `BOOT-002` dependency.
 
 ### VM-001 — Implement the reference interpreter
 
@@ -57,6 +71,9 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 - **Dependencies:** ISA-001, BOOT-002
 - **Description:** Execute S32 bit-exactly with region/capability enforcement and deterministic cycle accounting.
 - **Acceptance:** Every instruction and trap matches ISA vectors; `R0`, `HI`, `LO`, `PC`, signed overflow, division, alignment, permissions, execute targets, stack bounds, MMIO, halt, and budgets are tested; decoder never panics for arbitrary words; execution cannot index outside mapped storage; no unsafe code; host checks and QNX cross-build pass.
+- **Progress:** Typed decoding, reserved/illegal rejection, canonical re-encoding,
+  and cycle-cost metadata are implemented without unsafe code. Execution state,
+  memory, traps, and instruction effects remain.
 
 ### VM-002 — Implement versioned tracing and deterministic replay
 
@@ -69,10 +86,12 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 
 ### SCEN-001 — Specify the versioned scenario schema
 
-- **Category / status:** scenario / ready
+- **Category / status:** scenario / complete (2026-09-19)
 - **Dependencies:** BOOT-001
 - **Description:** Complete a typed declarative schema and its deterministic compilation contract.
 - **Acceptance:** Telemetry, actuators, feedback, phases/transitions, typed rules, safe states, dynamics, faults, and layout are specified; canonicalization/hash domain/versioning/migration/limits are exact; code injection and nondeterminism are structurally impossible; errors for units, references, cycles, coverage, conflicts, totals, and duplicate keys are defined; deterministic/stable MMIO allocation is specified; examples include a valve and electrical switch; human review occurs.
+- **Evidence:** `docs/scenario-schema.md`; user human review accepted on
+  2026-09-19.
 
 ### SCEN-002 — Implement scenario compiler and generic runtime
 

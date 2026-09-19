@@ -1,0 +1,10 @@
+# Assemble with: cargo run -p sentinel-app -- assemble examples/countdown.s32
+.entry start
+
+start:
+    li r1, 3
+
+countdown:
+    addiu r1, r1, -1
+    bne r1, r0, countdown
+    halt

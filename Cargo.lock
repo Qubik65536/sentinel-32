@@ -3,5 +3,12 @@
 version = 4
 
 [[package]]
-name = "sentinel-32"
+name = "sentinel-app"
+version = "0.1.0"
+dependencies = [
+ "sentinel-core",
+]
+
+[[package]]
+name = "sentinel-core"
 version = "0.1.0"
