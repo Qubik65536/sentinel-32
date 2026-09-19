@@ -1,0 +1,56 @@
+# This firmware owns the complete action sequence for the demonstration.
+# The YAML declares that a fill-valve request register exists and defines its
+# value encoding. It does not tell this program when to open or close anything.
+#
+# Launch-event sequence implemented below:
+#   1. Request that the propellant fill valve open.
+#   2. Perform a short, bounded loading-work loop inside the controller.
+#   3. Request that the fill valve close.
+#   4. Halt after the final request.
+#
+# The loop is only a visible example of control flow. Its three iterations are
+# not real elapsed time, a physical model, or a proven launch timing value.
+# A production controller would decide from declared sensor/feedback registers
+# and independent deterministic safety policy would still gate every request.
+#
+# YAML-generated memory map used here:
+#   S32_ACTUATOR_FILL_VALVE  write-only request register
+#
+# valve_state values come from the YAML enum order:
+#   0 = closed
+#   1 = open
+#
+# Registers used:
+#   R2 = remaining iterations in this demonstration's loading-work loop
+#   R4 = valve request value
+#   R5 = address of the fill-valve request register
+
+.entry start
+
+start:
+    # Locate the hardware request register declared in YAML. The assembly uses
+    # its generated name, so no numeric hardware address is embedded here.
+    LA   R5, S32_ACTUATOR_FILL_VALVE
+
+    # Launch action 1: request OPEN so simulated propellant loading may begin.
+    LI   R4, 1
+    SW   R4, 0(R5)
+
+    # The assembly program, rather than YAML, chooses how long its demonstration
+    # work lasts. R2 starts at 3 and is reduced once on each pass.
+    LI   R2, 3
+
+loading_work:
+    # Do one unit of controller work. If work remains, BNE sends execution back
+    # to loading_work. When R2 becomes zero, execution continues below.
+    ADDIU R2, R2, -1
+    BNE   R2, R0, loading_work
+
+loading_complete:
+    # Launch action 2: the controller has completed its local work, so request
+    # CLOSED before any later launch operation could occur.
+    LI   R4, 0
+    SW   R4, 0(R5)
+
+    # The complete OPEN -> work -> CLOSED sequence occurred in this one run.
+    HALT

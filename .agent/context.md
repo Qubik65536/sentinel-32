@@ -1,16 +1,20 @@
 # Repository context
 
-Last updated: 2026-09-19 during `VM-001`.
+Last updated: 2026-09-19 during `SCEN-002`.
 
 ## Current implementation
 
-The repository has a dependency-free Rust workspace. `sentinel-core` implements
+The repository has a Rust workspace. `sentinel-core` implements
 typed S32 decode/encode, the source assembler, validated manifests and sparse
 memory, and complete S32 v0 reference execution with permissions, capabilities,
-atomic traps, and deterministic cycle budgets. `sentinel-app` exposes `decode`,
-`check`, `assemble`, and `run`. The countdown example executes end to end in
-nine steps and cycles. `BOOT-002`, `ISA-002`, and `VM-001` remain formally
-blocked only by the missing target-side evidence dependency in `BUILD-001`.
+atomic traps, and deterministic cycle budgets. `sentinel-scenario` implements
+bounded strict YAML parsing, typed validation, canonical bundle compilation,
+stable MMIO allocation, generated symbols, and a generic deterministic
+runtime. The app exposes VM and scenario commands, including an end-to-end
+firmware harness with YAML-allocated MMIO. `BOOT-002`, `ISA-002`,
+`VM-001`, and `SCEN-002` remain formally blocked by the missing target-side
+evidence dependency in `BUILD-001`; `SCEN-002` also awaits review of its schema
+clarification.
 
 Current requirements give AI one advisory function: compare a bounded current-state snapshot against versioned written safety rules and emit structured, rule-linked findings. OpenAI is test-only. The hackathon deployment runs the checker client and a pinned local GGUF model served by `llama.cpp` on a companion host, with a loopback-only model endpoint and no remote fallback. AI does not generate firmware or participate in deterministic validation, evidence, activation, safety policy, or output control. This scope is recorded by `SCOPE-001` and `docs/decisions/DEC-011-advisory-ai-checker.md`.
 
@@ -25,10 +29,14 @@ Current requirements give AI one advisory function: compare a bounded current-st
 - `docs/development.md`: host/QNX workflow and `BUILD-001` audit/blocker.
 - `docs/configuration.md`: intended configuration for core services and the advisory checker backends.
 - `docs/s32-isa.md`: accepted ISA v0 contract; implemented incrementally under `ISA-002` and `VM-001`.
-- `docs/scenario-schema.md`: accepted schema v0 contract; implementation starts under `SCEN-002`.
+- `docs/scenario-schema.md`: accepted schema v0 contract and the concrete forms implemented by `SCEN-002`.
 - `crates/sentinel-core`: portable S32 ISA, assembler, VM, memory, traps, cycles, and tests.
-- `crates/sentinel-app`: host/QNX CLI for decoding, checking, assembling, and bounded execution.
+- `crates/sentinel-scenario`: strict parser, compiler, canonical artifacts, MMIO symbols, and deterministic runtime.
+- `crates/sentinel-app`: host/QNX CLI for VM and scenario workflows.
 - `examples/countdown.s32`: source-level assembler smoke example.
+- `examples/lab-scenario.yaml`: hardware-only valve MMIO inventory with no actions or scenario behavior.
+- `examples/full-scenario.yaml`: full scenario compiler and runtime smoke fixture.
+- `examples/valve-controller.s32`: commented firmware that owns the demo's OPEN, work-loop, and CLOSED action sequence.
 - `docs/safety-model.md`: claims, invariant families, containment, evidence.
 - `docs/threat-model.md`: assets, untrusted boundaries, abuse cases, controls.
 - `docs/validation.md`: validation layers and current results.
@@ -37,19 +45,28 @@ Current requirements give AI one advisory function: compare a bounded current-st
 ## Verified environment
 
 Host checks pass under upstream Rust 1.98.1 on `x86_64-unknown-linux-gnu`.
-QNX SDP 8.0 Build 14 and linked toolchain `qnx800` produce the AArch64 QNX 8.0
-release binary. The interpreter-enabled artifact cross-build passed with
-SHA-256 `7ac82a528974f75ea56e6ac4378b4029e7e9da3f8956a82d147c072d1d91fab4`.
+QNX SDP 8.0 Build 14 and linked toolchain `qnx800` produced the prior AArch64
+QNX 8.0 release binary. The prior scenario-enabled artifact had SHA-256
+`50a2c8546e1f256f85d7429b7f1b3e68409559fbc13cdcab6b88cb6824146aae`.
+The hardware-only update passes the host lane; its latest QNX link attempt was
+blocked by a local QNX license-lock timeout, so that older hash does not identify
+the current source.
 The operator reports successful earlier Raspberry Pi 5 execution; exact target
 image, commands, output, exit status, and execution of the current artifact
 remain to be captured before `BUILD-001` is complete.
+The documented QNX deployment root is `/data/home/qnxuser/sentinel-32`, with
+release, example, and artifact subdirectories. `scripts/qnx-pi-upload.sh`
+transfers an already-built release and fixtures to `qnxuser@qnxpi59.local`;
+`scripts/qnx-build-upload.sh` runs the full host lane, host and QNX release
+builds, scenario artifact generation, and that upload in one command. Target
+testing remains a separate operator SSH session.
 
 ## Next work
 
-Run the current interpreter-enabled binary on the Raspberry Pi 5 and capture
-the evidence in `docs/development.md`; that closes `BUILD-001`, `BOOT-002`,
-`ISA-002`, and `VM-001`. The next functional work can begin `VM-002` tracing or
-`SCEN-002` bounded scenario compilation.
+Run the current binary's VM and scenario checks on the Raspberry Pi 5 and
+capture the evidence in `docs/development.md`; review the SCEN-002 schema
+clarification. The next functional work is `SCEN-003`, the default rocket
+scenario, or `VM-002` tracing.
 
 ## Working tree note
 

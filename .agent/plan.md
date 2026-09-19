@@ -37,7 +37,8 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 - **Dependencies:** BOOT-001, BUILD-001
 - **Description:** Replace the seed package with only the crates justified by the proven architecture and establish host/QNX build configuration.
 - **Acceptance:** Workspace boundaries match `docs/architecture.md`; core crates have no target-only dependency leakage; host check script or documented commands run cleanly; QNX workspace release build passes; `Cargo.lock` is committed; README/context reflect the real tree; no empty placeholder crates or scripts are added.
-- **Progress:** The functional `sentinel-core` and `sentinel-app` crates are
+- **Progress:** The functional `sentinel-core`, `sentinel-scenario`, and
+  `sentinel-app` crates are
   scaffolded, and both host checks and the QNX workspace release build pass.
   Completion remains blocked on the target-side evidence dependency in
   `BUILD-001`.
@@ -99,10 +100,22 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 
 ### SCEN-002 — Implement scenario compiler and generic runtime
 
-- **Category / status:** scenario / planned
+- **Category / status:** scenario / blocked
 - **Dependencies:** SCEN-001, BOOT-002
 - **Description:** Validate source and compile immutable runtime bundles, policies, symbols, and deterministic dynamics.
 - **Acceptance:** Compiler enforces all schema/semantic/coverage checks; canonical source and bundle hashes are stable; MMIO symbols are aligned/deterministic and stable mode is tested; generated S32 include is reproducible; runtime tick behavior is deterministic; arbitrary code payloads remain inert/rejected; host checks and QNX cross-build pass.
+- **Progress:** The compiler and generic runtime satisfy the functional
+  acceptance criteria, including bounded strict YAML parsing, typed semantic
+  and coverage checks, domain-separated canonical hashes, exact bundle-byte
+  hashing, clean and stable MMIO allocation, reproducible symbols, all dynamic
+  and fault families, deterministic ticks, injection rejection, and an
+  end-to-end VM harness where a hardware-only YAML inventory allocates MMIO and
+  firmware owns the ordered OPEN/work/CLOSED actuator sequence. The runner
+  records each typed actuator write. Host validation passes; the latest QNX
+  link attempt was blocked by a local QNX license-lock timeout. Formal
+  completion waits on `BOOT-002` and human review
+  of the concrete v0 source forms and source-provenance clarification recorded
+  in `docs/scenario-schema.md`.
 
 ### SCEN-003 — Implement default rocket launch scenario
 
@@ -262,14 +275,14 @@ AI-002 + AI-003 + BUILD-001 + BOOT-002 -> DOC-001
 AI-004 + DOC-001 + UI-003 + TEST-001 -> DOC-002
 ```
 
-`ISA-001` and `SCEN-001` are ready specification tasks while external access for `BUILD-001` is arranged. Implementation tasks that depend on `BOOT-002` remain blocked.
+The implemented `ISA-002`, `VM-001`, and `SCEN-002` work remains formally
+blocked on `BOOT-002` while target evidence for `BUILD-001` is captured.
+`SCEN-002` also awaits human review of its schema clarification. The next
+functional scenario batch is `SCEN-003`.
 
 ## Open project questions
 
-- Where are the licensed QNX SDP 8.0 and QNX-modified Rust packages installed, and what local rustup name will be used?
 - How will this environment transfer to and execute commands on the QNX Raspberry Pi 5, and which target image/version is authoritative?
-- Which exact schema/canonical JSON/hash rules will `SCEN-001` choose?
-- Which exact opcode encodings, trap precedence, and cycle costs will `ISA-001` choose?
 - Which GGUF model, quantization, license, and SHA-256 will be pinned after `AI-003` measures compatibility and resource use?
 - Which written rule authoring format and rule-to-compiled-invariant traceability fields will `AI-001` select?
 - Which OpenAI test model will be pinned after current structured-output support is verified during `AI-002`?

@@ -67,6 +67,97 @@ Word zero is canonical `NOP` (`SLL R0,R0,0`). I/J opcodes are:
 | `HALT` | `3E` | none | all 26 low bits must be zero |
 | `TRAP` | `3F` | `code` | unsigned 26-bit application code |
 
+### Complete opcode and binary selector table
+
+The opcode is always the leftmost six bits, `word[31:26]`. Register fields hold
+the five-bit register number: `R0=00000`, `R1=00001`, `R29=11101`, and
+`R31=11111`. Binary fields below are written most-significant bit first.
+
+Every R-format instruction has opcode `0x00` (`000000`). The rightmost six-bit
+function field selects the operation:
+
+| Instruction | Opcode hex | Opcode bin | Function hex | Function bin | Assembly operands |
+|---|---:|---:|---:|---:|---|
+| `SLL` | `00` | `000000` | `00` | `000000` | `rd,rt,shamt` |
+| `SRL` | `00` | `000000` | `02` | `000010` | `rd,rt,shamt` |
+| `SRA` | `00` | `000000` | `03` | `000011` | `rd,rt,shamt` |
+| `SLLV` | `00` | `000000` | `04` | `000100` | `rd,rt,rs` |
+| `SRLV` | `00` | `000000` | `06` | `000110` | `rd,rt,rs` |
+| `SRAV` | `00` | `000000` | `07` | `000111` | `rd,rt,rs` |
+| `JR` | `00` | `000000` | `08` | `001000` | `rs` |
+| `JALR` | `00` | `000000` | `09` | `001001` | `rd,rs` |
+| `MFHI` | `00` | `000000` | `10` | `010000` | `rd` |
+| `MTHI` | `00` | `000000` | `11` | `010001` | `rs` |
+| `MFLO` | `00` | `000000` | `12` | `010010` | `rd` |
+| `MTLO` | `00` | `000000` | `13` | `010011` | `rs` |
+| `MULT` | `00` | `000000` | `18` | `011000` | `rs,rt` |
+| `MULTU` | `00` | `000000` | `19` | `011001` | `rs,rt` |
+| `DIV` | `00` | `000000` | `1A` | `011010` | `rs,rt` |
+| `DIVU` | `00` | `000000` | `1B` | `011011` | `rs,rt` |
+| `ADD` | `00` | `000000` | `20` | `100000` | `rd,rs,rt` |
+| `ADDU` | `00` | `000000` | `21` | `100001` | `rd,rs,rt` |
+| `SUB` | `00` | `000000` | `22` | `100010` | `rd,rs,rt` |
+| `SUBU` | `00` | `000000` | `23` | `100011` | `rd,rs,rt` |
+| `AND` | `00` | `000000` | `24` | `100100` | `rd,rs,rt` |
+| `OR` | `00` | `000000` | `25` | `100101` | `rd,rs,rt` |
+| `XOR` | `00` | `000000` | `26` | `100110` | `rd,rs,rt` |
+| `NOR` | `00` | `000000` | `27` | `100111` | `rd,rs,rt` |
+| `SLT` | `00` | `000000` | `2A` | `101010` | `rd,rs,rt` |
+| `SLTU` | `00` | `000000` | `2B` | `101011` | `rd,rs,rt` |
+
+Word zero is canonical `NOP`: `SLL R0,R0,0` encodes as
+`000000 00000 00000 00000 00000 000000`.
+
+I-format and J-format instructions select their operation directly with the
+opcode. `BLTZ` and `BGEZ` share the `REGIMM` opcode and use `rt` as a secondary
+selector rather than a destination register.
+
+| Instruction | Opcode hex | Opcode bin | Extra selector | Assembly operands |
+|---|---:|---:|---|---|
+| `BLTZ` | `01` | `000001` | `rt=00000` | `rs,target` |
+| `BGEZ` | `01` | `000001` | `rt=00001` | `rs,target` |
+| `J` | `02` | `000010` | — | `target` |
+| `JAL` | `03` | `000011` | — | `target` |
+| `BEQ` | `04` | `000100` | — | `rs,rt,target` |
+| `BNE` | `05` | `000101` | — | `rs,rt,target` |
+| `ADDI` | `08` | `001000` | — | `rt,rs,imm` |
+| `ADDIU` | `09` | `001001` | — | `rt,rs,imm` |
+| `SLTI` | `0A` | `001010` | — | `rt,rs,imm` |
+| `SLTIU` | `0B` | `001011` | — | `rt,rs,imm` |
+| `ANDI` | `0C` | `001100` | — | `rt,rs,imm` |
+| `ORI` | `0D` | `001101` | — | `rt,rs,imm` |
+| `XORI` | `0E` | `001110` | — | `rt,rs,imm` |
+| `LUI` | `0F` | `001111` | `rs=00000` | `rt,imm` |
+| `LB` | `20` | `100000` | — | `rt,offset(rs)` |
+| `LH` | `21` | `100001` | — | `rt,offset(rs)` |
+| `LW` | `23` | `100011` | — | `rt,offset(rs)` |
+| `LBU` | `24` | `100100` | — | `rt,offset(rs)` |
+| `LHU` | `25` | `100101` | — | `rt,offset(rs)` |
+| `SB` | `28` | `101000` | — | `rt,offset(rs)` |
+| `SH` | `29` | `101001` | — | `rt,offset(rs)` |
+| `SW` | `2B` | `101011` | — | `rt,offset(rs)` |
+| `HALT` | `3E` | `111110` | low 26 bits `0` | none |
+| `TRAP` | `3F` | `111111` | — | `code` |
+
+### Operand-to-bit-field association
+
+The assembly operand names describe roles; the binary field names describe
+positions. These mappings are normative:
+
+| Assembly form | Binary association |
+|---|---|
+| `ADD rd,rs,rt` and other register ALU | `rs=left`, `rt=right`, `rd=destination`, `shamt=00000` |
+| `SLL rd,rt,shamt` and fixed shifts | `rs=00000`, `rt=value`, `rd=destination`, `shamt=amount` |
+| `SLLV rd,rt,rs` and variable shifts | `rs=amount`, `rt=value`, `rd=destination`, `shamt=00000` |
+| `ADDIU rt,rs,imm` and immediate ALU | `rs=source`, `rt=destination`, `immediate=imm` |
+| `LW rt,offset(rs)` and loads | `rs=base address`, `rt=destination`, `immediate=offset` |
+| `SW rt,offset(rs)` and stores | `rs=base address`, `rt=value to store`, `immediate=offset` |
+| `BEQ rs,rt,target` / `BNE` | `rs=left`, `rt=right`, `immediate=(target-(PC+4))/4` |
+| `BLTZ rs,target` / `BGEZ` | `rs=value`, `rt=selector`, `immediate=(target-(PC+4))/4` |
+| `J target` / `JAL target` | `target[25:0]=address[27:2]`; upper address bits come from `PC+4` |
+| `HALT` | opcode `111110`; every remaining bit is zero |
+| `TRAP code` | opcode `111111`; low 26 bits contain `code` |
+
 ## Execution semantics
 
 Signed values use two's complement. `ADD`, `ADDI`, and `SUB` trap on signed
@@ -158,6 +249,55 @@ to `ADDU rd,rs,R0`; `B target` to `BEQ R0,R0,target`; `RET` to `JR RA`; and
 `LI/LA rt,expr` to `LUI rt,hi16(expr)` followed by `ORI rt,rt,lo16(expr)`.
 `LI/LA` always use two words, avoiding layout relaxation. Diagnostics require
 line, column, and a stable actionable code.
+
+Pseudo-instructions have no opcode of their own. The assembler replaces them
+with these real instructions before bytes are emitted:
+
+| Source form | Real encoded instruction(s) | Opcode/function selectors |
+|---|---|---|
+| `NOP` | `SLL R0,R0,0` | opcode `000000`, function `000000` |
+| `MOVE rd,rs` | `ADDU rd,rs,R0` | opcode `000000`, function `100001` |
+| `B target` | `BEQ R0,R0,target` | opcode `000100` |
+| `RET` | `JR R31` | opcode `000000`, function `001000` |
+| `LI rt,expr` | `LUI rt,hi16(expr)`; `ORI rt,rt,lo16(expr)` | opcodes `001111`; `001101` |
+| `LA rt,expr` | same two instructions as `LI` | opcodes `001111`; `001101` |
+
+Labels, `.entry`, `.word`, and `.zero` are assembler syntax rather than CPU
+instructions. A label binds a source name to the current byte address. `.entry`
+selects the manifest entry address. `.word` emits four literal bytes and `.zero`
+emits the requested aligned count of zero bytes. Labels and `.entry` emit no
+instruction word and therefore have no opcode.
+
+The scenario runner may also supply external symbols generated from validated
+YAML MMIO allocation. For example, `S32_TELEMETRY_COUNTER` resolves to a
+32-bit address before `LA` expands. The symbol is not an instruction and does
+not occupy memory by itself.
+
+### How the included examples map to real instructions
+
+`examples/countdown.s32` uses:
+
+| Source | What the assembler/CPU uses |
+|---|---|
+| `.entry start` | entry metadata; no instruction |
+| `li r1,3` | `LUI R1,0` then `ORI R1,R1,3` |
+| `addiu r1,r1,-1` | real `ADDIU`, opcode `001001` |
+| `bne r1,r0,countdown` | real `BNE`, opcode `000101`, signed PC-relative displacement |
+| `halt` | real `HALT`, opcode `111110`, remaining 26 bits zero |
+
+`examples/valve-controller.s32` uses:
+
+| Source | What the assembler/CPU uses |
+|---|---|
+| `LA R1,S32_TELEMETRY_COUNTER` | `LUI` + `ORI` containing the YAML-assigned address |
+| `LW R2,0(R1)` | real `LW`, opcode `100011`; read one MMIO word |
+| `SLTI R3,R2,3` | real `SLTI`, opcode `001010`; set `R3` from the comparison |
+| `BEQ R3,R0,request_closed` | real `BEQ`, opcode `000100` |
+| `LI R4,1` / `LI R4,0` | two real instructions for each `LI` |
+| `B write_request` | `BEQ R0,R0,write_request`, opcode `000100` |
+| `LA R5,S32_ACTUATOR_VALVE` | `LUI` + `ORI` containing the YAML-assigned address |
+| `SW R4,0(R5)` | real `SW`, opcode `101011`; write one MMIO request word |
+| `HALT` | real `HALT`, opcode `111110` |
 
 ## Golden vectors
 

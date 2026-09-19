@@ -357,6 +357,12 @@ pub struct RunResult {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MemoryWrite {
+    pub address: u32,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Machine {
     registers: [u32; 32],
     hi: u32,
@@ -368,6 +374,7 @@ pub struct Machine {
     capabilities: Vec<Capability>,
     stack_low: u32,
     stack_high: u32,
+    memory_writes: Vec<MemoryWrite>,
 }
 
 impl Machine {
@@ -444,6 +451,7 @@ impl Machine {
             capabilities: manifest.capabilities,
             stack_low: manifest.stack_low,
             stack_high: manifest.stack_high,
+            memory_writes: Vec::new(),
         })
     }
 
@@ -486,6 +494,10 @@ impl Machine {
             .iter()
             .find(|slot| slot.base == base)
             .map(MemorySlot::bytes)
+    }
+
+    pub fn memory_writes(&self) -> &[MemoryWrite] {
+        &self.memory_writes
     }
 
     pub fn run(&mut self, cycle_budget: u64) -> Result<RunResult, StepError> {
@@ -865,6 +877,10 @@ impl Machine {
             let offset = usize::try_from(address - slot.base).unwrap_or(0);
             if let Some(destination) = slot.bytes.get_mut(offset..offset + bytes.len()) {
                 destination.copy_from_slice(bytes);
+                self.memory_writes.push(MemoryWrite {
+                    address,
+                    bytes: bytes.to_vec(),
+                });
             }
         }
     }

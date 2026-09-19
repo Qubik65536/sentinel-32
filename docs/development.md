@@ -5,10 +5,27 @@
 Use the host-native lane for fast development:
 
 ```sh
-cargo fmt --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+CARGO_TARGET_DIR=target/host cargo fmt --check
+CARGO_TARGET_DIR=target/host \
+  cargo clippy --workspace --all-targets -- -D warnings
+CARGO_TARGET_DIR=target/host cargo test --workspace
 ```
+
+Rust build scripts are host executables and require the distrobox to provide a
+host linker named `cc`, even when the project dependencies are pure Rust. In the
+Ubuntu-based development distrobox, install it once with
+`sudo apt-get install build-essential` after refreshing the package index. A
+Fedora-based distrobox uses `sudo dnf install gcc` instead. Verify the result
+with `command -v cc` before running the host lane or a clean QNX build.
+
+Host and QNX commands use separate Cargo target directories because the custom
+QNX compiler also creates host-side build artifacts. Sharing one target
+directory can make stable Rust load dependencies produced by the incompatible
+QNX compiler and fail with `E0514`. The automated build script pins absolute
+stable `rustc` and `rustdoc` paths for its host lane, so it also works when the
+calling shell has already sourced `qnxsdp-env.sh`. A compiler fingerprint in
+`target/host` causes that cache alone to be cleaned when the host compiler
+changes or when an unrecognized cache predates the fingerprint.
 
 The target lane must use the QNX-modified compiler supplied for QNX SDP 8.0 on a supported x86 Linux or Windows host. QNX documents `aarch64-unknown-nto-qnx800` for AArch64 and requires the custom compiler to be linked into rustup before indirect use through Cargo. Source the installed SDP environment on Linux before building.
 
@@ -19,7 +36,8 @@ rustc +<LOCAL_QNX_TOOLCHAIN_NAME> --version --verbose
 rustc +<LOCAL_QNX_TOOLCHAIN_NAME> --print cfg \
   --target aarch64-unknown-nto-qnx800
 cargo +<LOCAL_QNX_TOOLCHAIN_NAME> build \
-  --target aarch64-unknown-nto-qnx800 --release
+  --target aarch64-unknown-nto-qnx800 --release \
+  --target-dir target/qnx800
 ```
 
 The placeholders are deliberate. Record the actual licensed installation path, local rustup name, compiler version, environment, linker invocation, and emitted cfg values during `BUILD-001`; do not encode guesses in repository configuration.
@@ -51,7 +69,8 @@ The clean cross-build completed with:
 
 ```sh
 source /var/home/qubik65536/qnx800/qnxsdp-env.sh
-cargo +qnx800 build --target aarch64-unknown-nto-qnx800 --release
+cargo +qnx800 build --target aarch64-unknown-nto-qnx800 --release \
+  --target-dir target/qnx800
 ```
 
 The QNX toolchain package does not contain Cargo, so rustup reports that it uses
@@ -74,19 +93,63 @@ not recorded in the repository.
 
 ## Workspace cross-build — 2026-09-19
 
-After adding functional `sentinel-core` and `sentinel-app` workspace members,
+After adding functional `sentinel-core`, `sentinel-scenario`, and `sentinel-app`
+workspace members,
 the full QNX lane completed with:
 
 ```sh
 source /var/home/qubik65536/qnx800/qnxsdp-env.sh
 cargo +qnx800 build --workspace \
-  --target aarch64-unknown-nto-qnx800 --release
+  --target aarch64-unknown-nto-qnx800 --release \
+  --target-dir target/qnx800
 ```
 
-The current interpreter-enabled `sentinel-app` is an AArch64 ELF64 PIE using
+The current scenario-enabled `sentinel-app` is an AArch64 ELF64 PIE using
 `/usr/lib/ldqnx-64.so.2`. Its SHA-256 on 2026-09-19 is
-`7ac82a528974f75ea56e6ac4378b4029e7e9da3f8956a82d147c072d1d91fab4`.
+`50a2c8546e1f256f85d7429b7f1b3e68409559fbc13cdcab6b88cb6824146aae`.
 This result covers cross-compilation and linking, not target execution.
+
+## Raspberry Pi 5 deployment directory
+
+The documented QNX target deployment root is
+`/data/home/qnxuser/sentinel-32`. The release executable is stored under
+`release/`, fixtures under `examples/`, and provenance or generated files under
+`artifacts/`. All target commands below use absolute paths; testing does not
+depend on `/tmp` or the current working directory.
+
+Create it once on the Pi if it does not already exist:
+
+```sh
+mkdir -p /data/home/qnxuser/sentinel-32/release \
+  /data/home/qnxuser/sentinel-32/examples \
+  /data/home/qnxuser/sentinel-32/artifacts
+chmod 755 /data/home/qnxuser/sentinel-32
+```
+
+From the repository root inside the configured distrobox, upload an already
+built QNX release and its fixtures with:
+
+```sh
+./scripts/qnx-pi-upload.sh
+```
+
+The script only stages and transfers files; it does not build or run target
+tests. It targets `qnxuser@qnxpi59.local` and uploads the executable, examples,
+`Cargo.lock`, binary SHA-256, and source revision. Extra files passed as
+arguments are copied into the target `artifacts/` directory. It does not store
+the SSH password or place it in a command argument.
+
+For the normal edit-to-Pi workflow, run the complete validation, host release
+build, scenario artifact compilation, QNX release build, and upload with one
+command:
+
+```sh
+./scripts/qnx-build-upload.sh
+```
+
+This wrapper requires `cc` and the installed QNX environment described above.
+It invokes `qnx-pi-upload.sh` after every build succeeds and leaves target test
+execution to the operator's existing SSH session.
 
 ## VM-001 Raspberry Pi 5 test
 
@@ -97,26 +160,29 @@ script deliberately rejects other shells:
 bash
 source /var/home/qubik65536/qnx800/qnxsdp-env.sh
 cargo +qnx800 build --workspace \
-  --target aarch64-unknown-nto-qnx800 --release
-file target/aarch64-unknown-nto-qnx800/release/sentinel-app
-sha256sum target/aarch64-unknown-nto-qnx800/release/sentinel-app
+  --target aarch64-unknown-nto-qnx800 --release \
+  --target-dir target/qnx800
+file target/qnx800/aarch64-unknown-nto-qnx800/release/sentinel-app
+sha256sum target/qnx800/aarch64-unknown-nto-qnx800/release/sentinel-app
 ```
 
 For the current tree, `file` must identify an AArch64 QNX PIE with interpreter
 `/usr/lib/ldqnx-64.so.2`, and the expected SHA-256 is
-`7ac82a528974f75ea56e6ac4378b4029e7e9da3f8956a82d147c072d1d91fab4`.
+`50a2c8546e1f256f85d7429b7f1b3e68409559fbc13cdcab6b88cb6824146aae`.
 If the source changes, record the new tested commit and hash instead of expecting
 this value.
 
-Copy both the executable and source fixture to the Pi using the operator's SSH
-account and private address. Do not put either value in the repository:
+Copy both the executable and source fixture to the Pi using the documented
+`qnxuser@qnxpi59.local` target:
 
 ```sh
-scp target/aarch64-unknown-nto-qnx800/release/sentinel-app \
-  <QNX_USER>@<PI_ADDRESS>:/tmp/sentinel-app
+scp target/qnx800/aarch64-unknown-nto-qnx800/release/sentinel-app \
+  qnxuser@qnxpi59.local:/data/home/qnxuser/sentinel-32/release/sentinel-app
 scp examples/countdown.s32 \
-  <QNX_USER>@<PI_ADDRESS>:/tmp/countdown.s32
-ssh <QNX_USER>@<PI_ADDRESS>
+  qnxuser@qnxpi59.local:/data/home/qnxuser/sentinel-32/examples/countdown.s32
+scp examples/valve-controller.s32 \
+  qnxuser@qnxpi59.local:/data/home/qnxuser/sentinel-32/examples/valve-controller.s32
+ssh qnxuser@qnxpi59.local
 ```
 
 On the Pi, record the target image identity, run the positive case, and capture
@@ -124,9 +190,10 @@ its exit status:
 
 ```sh
 uname -a
-chmod 755 /tmp/sentinel-app
-/tmp/sentinel-app
-/tmp/sentinel-app run /tmp/countdown.s32 9
+chmod 755 /data/home/qnxuser/sentinel-32/release/sentinel-app
+/data/home/qnxuser/sentinel-32/release/sentinel-app
+/data/home/qnxuser/sentinel-32/release/sentinel-app run \
+  /data/home/qnxuser/sentinel-32/examples/countdown.s32 9
 echo $?
 ```
 
@@ -142,7 +209,8 @@ status must be `0`. Then test that the cycle budget fails closed before the
 ninth instruction:
 
 ```sh
-/tmp/sentinel-app run /tmp/countdown.s32 8
+/data/home/qnxuser/sentinel-32/release/sentinel-app run \
+  /data/home/qnxuser/sentinel-32/examples/countdown.s32 8
 echo $?
 ```
 
@@ -155,8 +223,55 @@ error: cycle budget exceeded: cycles=8, next_cost=1, budget=8
 
 Record the date, source commit, binary SHA-256, `uname -a` output, exact transfer
 and execution commands, full positive output, both exit statuses, and whether
-the device was a Raspberry Pi 5. Remove the two `/tmp` files after the evidence
-is captured if the target should not retain test artifacts.
+the device was a Raspberry Pi 5.
+
+## SCEN-002 Raspberry Pi 5 test
+
+Use the same final binary and target identity captured above. The upload script
+places the hardware manifest and assembly program under the documented target
+tree. Validate and compile the hardware inventory:
+
+```sh
+/data/home/qnxuser/sentinel-32/release/sentinel-app hardware-check \
+  /data/home/qnxuser/sentinel-32/examples/lab-scenario.yaml
+echo $?
+/data/home/qnxuser/sentinel-32/release/sentinel-app hardware-compile \
+  /data/home/qnxuser/sentinel-32/examples/lab-scenario.yaml \
+  /data/home/qnxuser/sentinel-32/artifacts/hardware-bundle.json \
+  /data/home/qnxuser/sentinel-32/artifacts/hardware-symbols.inc
+echo $?
+```
+
+Both commands must exit `0` and report two MMIO entries. Then run the
+assembly-owned action sequence against those YAML-declared registers:
+
+```sh
+/data/home/qnxuser/sentinel-32/release/sentinel-app hardware-run \
+  /data/home/qnxuser/sentinel-32/examples/lab-scenario.yaml \
+  /data/home/qnxuser/sentinel-32/examples/valve-controller.s32 1 100
+echo $?
+```
+
+The MMIO preamble must map `actuator.fill_valve` to `0x50000000` and
+`feedback.fill_valve_position` to `0x60000000`. The run line must show
+`actions=[actuator.fill_valve=open->actuator.fill_valve=closed]` and the final
+request must be `closed`. This proves the YAML only supplied hardware existence
+and encoding while the assembly issued both actions. The command must exit `0`.
+
+Also verify fail-closed argument handling:
+
+```sh
+/data/home/qnxuser/sentinel-32/release/sentinel-app hardware-run \
+  /data/home/qnxuser/sentinel-32/examples/lab-scenario.yaml \
+  /data/home/qnxuser/sentinel-32/examples/valve-controller.s32 0 100
+echo $?
+```
+
+It must report `error: run/tick count must be positive` and exit `2`.
+Record the exact output, exit statuses, tested source commit, binary hash, and
+target image identity. Keep the executable and fixtures in the documented
+deployment tree. Generated `hardware-bundle.json` and `hardware-symbols.inc` may be
+replaced by the next tested release after their evidence is captured.
 
 ## Required BUILD-001 evidence
 

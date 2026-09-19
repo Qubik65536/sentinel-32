@@ -1,5 +1,10 @@
 # Sentinel scenario schema v0
 
+The smaller hardware-only lab inventory is specified separately in
+`docs/hardware-manifest.md`. It must not be confused with this publishable
+scenario contract: it contains no phases, safety rules, dynamics, faults, or
+output-gating policy.
+
 **Schema identifier:** `sentinel.scenario/v0`
 **Status:** Accepted under `SCEN-001` after human review on 2026-09-19.
 
@@ -48,6 +53,14 @@ All domain collections are maps keyed by ID; entries do not repeat their ID.
 `{defaults: {actuator-ref: action}, profiles: {id: profile}}`. `dynamics` and
 `faults` are ID-keyed maps. Empty optional collections normalize to empty maps
 rather than null.
+
+V0 uses these concrete YAML forms for fields that have closed alternatives:
+
+- actuator commands are `set` or `{pulse: {duration_ticks: N}}`;
+- phase timeouts are `hold`, `abort`, or `{transition: transition_id}`;
+- rule scopes are `global` or a nonempty sequence of phase IDs; and
+- responses, safe-state actions, dynamic operations, and fault effects are
+  externally tagged one-key maps using the alternative names defined below.
 
 `metadata` contains `name` (1..128 scalar values), `description` (0..2048), and
 at most 32 tags of 1..32 characters. Tags and all ID-keyed maps are serialized
@@ -241,12 +254,15 @@ bundle hash       sentinel32:scenario-bundle:v0\0 + canonical compiled semantic 
 presentation hash sentinel32:scenario-presentation:v0\0 + canonical metadata/layout artifact
 ```
 
-The compiled bundle contains the schema ID, scenario ID/publication, source and
-semantic hashes, tick duration, types, channels, phases, rules, safe-state
-matrix, dynamics, faults, MMIO map, and compiler-contract version. It excludes
-layout and authoring comments. Firmware binds scenario ID and bundle hash.
-Changing only layout or display metadata changes source/presentation hashes but
-not semantic/bundle hashes. Published semantic bundles are immutable.
+The compilation result retains the full source hash and presentation hash as
+provenance. The compiled semantic bundle contains the schema ID, scenario
+ID/publication, semantic hash, tick duration, types, channels, phases, rules,
+safe-state matrix, dynamics, faults, MMIO map, and compiler-contract version.
+It excludes the presentation-sensitive source hash, layout, display metadata,
+and authoring comments. Firmware binds scenario ID and the hash of the exact
+canonical compiled bundle bytes. Changing only layout or display metadata
+changes source/presentation hashes but not semantic/bundle hashes. Published
+semantic bundles are immutable.
 
 V0 has no automatic migration. A compiler may read only its exact supported
 schema identifier. Migration is an explicit offline command that produces new

@@ -2,9 +2,9 @@
 
 ## Status
 
-This document records the version-0 boundaries. `sentinel-core` and
-`sentinel-app` now exist; the remaining crates are introduced only with
-functional content and their corresponding tasks.
+This document records the version-0 boundaries. `sentinel-core`,
+`sentinel-scenario`, and `sentinel-app` now exist; the remaining crates are
+introduced only with functional content and their corresponding tasks.
 
 ## Trust and data flow
 
@@ -42,10 +42,12 @@ AI findings, user input, scenario source, firmware source, and the network are o
 | `sentinel-ai-check` | Snapshot/rule/finding types, fixtures, test-only OpenAI adapter, local `llama.cpp` adapter, evaluation metadata | Advisory only; no firmware generation, activation, policy, or output-control path |
 | `sentinel-app` | Process entry points, orchestration, NDJSON, dashboard and Studio | UI failure cannot affect essential control |
 
-`sentinel-core` and `sentinel-app` are implemented workspace members and pass
-the QNX cross-build. The core contains ISA types, canonical decode/encode,
-source assembly, sparse memory and manifest types, and the reference
-interpreter. The other rows remain planned boundaries.
+`sentinel-core`, `sentinel-scenario`, and `sentinel-app` are implemented
+workspace members and pass the QNX cross-build. The core contains ISA types,
+canonical decode/encode, source assembly, sparse memory and manifest types, and
+the reference interpreter. The scenario crate contains bounded source parsing,
+typed validation, canonical compilation, stable MMIO allocation, and the
+generic deterministic runtime. The other rows remain planned boundaries.
 
 ## Runtime separation
 
@@ -66,11 +68,22 @@ request, feedback, or supervisor access. Program reads and instruction fetches
 use the validated program mapping. Safety-control accesses always trap for
 ordinary firmware. The current `sentinel-app run` command is a bounded lab
 harness with a program mapping and a 64 KiB stack only; scenario compilation
-will supply MMIO slots and capabilities later.
+supplies read-only telemetry/feedback slots and write-only actuator-request
+slots to the `hardware-run` lab harness. Its hardware YAML declares only
+register existence, types, and reset values. Firmware receives the addresses
+compiled from that inventory, and the assembly owns the demonstrated action
+sequence. The manifest grants exactly those MMIO capabilities.
 
 ## Scenario boundary
 
-The scenario compiler owns typed channels, phases, transitions, invariants, safe-state policies, dynamics, faults, stable MMIO allocation, generated symbols, canonical serialization, and hashing. Runtime code consumes a compiled immutable bundle. Publication and firmware activation are forbidden while the simulation is armed.
+The scenario compiler owns typed channels, phases, transitions, rules,
+safe-state declarations, dynamics, faults, stable MMIO allocation, generated
+symbols, canonical serialization, and hashing. Runtime code consumes a compiled
+immutable bundle and deterministically updates channels, faults, phases, and
+rule observations. It reports hold and abort state but does not gate actuator
+outputs; deterministic policy evaluation and output gating belong to
+`sentinel-safety` under `SAFE-001`. Publication and firmware activation are
+forbidden while the simulation is armed.
 
 ## Lifecycle boundary
 

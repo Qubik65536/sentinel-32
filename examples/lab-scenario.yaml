@@ -1,0 +1,36 @@
+# Hardware inventory used by valve-controller.s32.
+#
+# This file only says which hardware registers exist, their value types, and
+# their reset values. It does not describe a launch sequence, timing, phase,
+# transition, rule, valve movement, or other action. The S32 assembly program
+# decides when to request OPEN and CLOSED.
+
+schema: sentinel.hardware/v0
+id: launch_pad_hardware
+publication: 1
+
+# Enum order defines the value stored in the 32-bit MMIO register:
+# closed = 0, open = 1.
+types:
+  valve_state:
+    variants: [closed, open]
+
+# No sensor is needed by this small firmware demonstration.
+telemetry: {}
+
+# A write-only command-request register for the propellant fill valve.
+# `initial` is the register's reset value; it does not schedule an action.
+actuators:
+  fill_valve:
+    type: valve_state
+    unit: none
+    initial: closed
+
+# A separate read-only register representing physical valve position.
+# This demo declares it so firmware can be extended to inspect hardware
+# feedback. The YAML does not change its value.
+feedback:
+  fill_valve_position:
+    type: valve_state
+    unit: none
+    initial: closed

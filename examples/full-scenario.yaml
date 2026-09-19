@@ -1,0 +1,200 @@
+# Full scenario compiler fixture retained for scenario-policy tests.
+#
+# The hardware-facing sections are:
+#   types       values exchanged through hardware registers
+#   telemetry   read-only sensor registers visible to firmware
+#   actuators   write-only request registers visible to firmware
+#   feedback    read-only physical-position registers visible to firmware
+#   dynamics    deterministic behavior of the simulated hardware
+#   faults      optional hardware fault injection
+#
+# The remaining sections exist because this file currently uses the complete
+# sentinel.scenario/v0 contract. They describe scenario identity, phase/policy
+# checks, safe defaults, and presentation. They are not firmware instructions.
+# A future hardware-only contract must be reviewed separately before these can
+# be removed from a publishable scenario.
+
+# Exact schema understood by the scenario compiler.
+schema: sentinel.scenario/v0
+# Stable machine-readable scenario ID and monotonically increasing publication.
+id: lab_counter
+publication: 1
+# One simulated hardware tick represents 100 ms; this is virtual, not WCET.
+tick_ms: 100
+# Human-facing text. It does not change compiled hardware behavior.
+metadata:
+  name: Deterministic lab counter
+  description: A generic valve and counter fixture for compiler and runtime checks.
+  tags: [example, deterministic]
+# Named hardware value encodings. Enum order defines the MMIO integer:
+# closed=0 and open=1.
+types:
+  valve_state:
+    variants: [closed, open]
+# Sensor registers. Firmware receives read-only MMIO access.
+telemetry:
+  counter:
+    # Signed 32-bit loading-progress counter, valid from 0 through 100.
+    type: i32
+    unit: count
+    range: {min: 0, max: 100}
+    initial: 0
+    stale_after_ticks: 2
+    bands:
+      low: {min: 0, max: 49}
+      high: {min: 50, max: 100}
+# Commandable hardware. Ordinary firmware receives a write-only request slot,
+# not direct authority over the simulated valve.
+actuators:
+  valve:
+    type: valve_state
+    unit: none
+    initial: closed
+    safe_default: closed
+    deenergized: closed
+    privilege: ordinary
+    reversibility: reversible
+    # Physical position is observed through a separate feedback register.
+    feedback: feedback.valve_position
+    feedback_timeout_ticks: 2
+    mutually_exclusive: []
+    allow_preserve_current: false
+    command: set
+# Physical hardware feedback. Firmware may read this but may not write it.
+feedback:
+  valve_position:
+    type: valve_state
+    unit: none
+    initial: closed
+    stale_after_ticks: 2
+    actuator: actuator.valve
+    confirms:
+      compare:
+        op: eq
+        left: {ref: feedback.valve_position}
+        right: {ref: actuator.valve}
+# Scenario progression and completion policy. This is not hardware inventory
+# and is not executed as firmware.
+phases:
+  initial: idle
+  items:
+    idle:
+      entry: {const: {type: bool, value: true}}
+      completion:
+        compare:
+          op: ge
+          left: {ref: telemetry.counter}
+          right: {const: {type: i32, value: 3}}
+      timeout_ticks: 20
+      on_timeout: hold
+      armed: false
+      terminal: false
+      abort_terminal: false
+      transitions:
+        - id: counter_ready
+          to: complete
+          trigger: automatic
+          new_attempt: false
+          guard:
+            compare:
+              op: ge
+              left: {ref: telemetry.counter}
+              right: {const: {type: i32, value: 3}}
+    complete:
+      entry: {const: {type: bool, value: true}}
+      completion: {const: {type: bool, value: true}}
+      timeout_ticks: 0
+      on_timeout: hold
+      transitions: []
+      armed: false
+      terminal: true
+      abort_terminal: false
+# Deterministic observations/interlocks evaluated independently of firmware.
+rules:
+  counter_high:
+    condition:
+      compare:
+        op: ge
+        left: {ref: telemetry.counter}
+        right: {const: {type: i32, value: 90}}
+    scope: global
+    severity: advisory
+    response: {observe: true}
+    message: Counter is near its upper bound.
+  counter_stale:
+    condition:
+      not: {fresh: {ref: telemetry.counter, max_age_ticks: 2}}
+    scope: global
+    severity: inhibit
+    response: {inhibit: {targets: [actuator.valve]}}
+    message: Counter telemetry is stale.
+  valve_feedback_stale:
+    condition:
+      not: {fresh: {ref: feedback.valve_position, max_age_ticks: 2}}
+    scope: global
+    severity: inhibit
+    response: {inhibit: {targets: [actuator.valve]}}
+    message: Valve feedback is stale.
+  valve_mismatch:
+    condition:
+      not:
+        compare:
+          op: eq
+          left: {ref: feedback.valve_position}
+          right: {ref: actuator.valve}
+    scope: global
+    severity: hold
+    response: {hold: {profile: valve_hold}}
+    message: Valve command and feedback disagree.
+# Deterministic fallback requests used by later safety/output-gating work.
+safe_states:
+  defaults:
+    actuator.valve: {set: closed}
+  profiles:
+    valve_hold:
+      layer: hazard
+      priority: 1
+      when:
+        not:
+          compare:
+            op: eq
+            left: {ref: feedback.valve_position}
+            right: {ref: actuator.valve}
+      actions:
+        actuator.valve: {deenergize: true}
+# Simulated plant behavior, evaluated once per hardware tick.
+dynamics:
+  advance_counter:
+    # Model loading progress by adding one, clamped to the declared 0..100 range.
+    target: telemetry.counter
+    add_clamped: 1
+  confirm_valve:
+    # Model valve mechanics: physical feedback follows the firmware request
+    # after one simulated hardware tick.
+    target: feedback.valve_position
+    confirm_after:
+      actuator: actuator.valve
+      delay_ticks: 1
+# Named hardware faults available to deterministic test fixtures.
+faults:
+  counter_override:
+    activation: fixture
+    one_shot: false
+    priority: 10
+    effects:
+      # Replace the sensor reading with 99 while this fault is active.
+      - override: {target: telemetry.counter, value: 99}
+# Presentation only; never changes MMIO allocation or hardware semantics.
+layout:
+  panels:
+    overview:
+      title: Overview
+      nodes: [counter]
+  nodes:
+    counter:
+      reference: telemetry.counter
+      x: 0
+      y: 0
+      width: 4
+      height: 2
+      style: gauge

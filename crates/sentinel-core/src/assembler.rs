@@ -43,6 +43,14 @@ struct Line {
 }
 
 pub fn assemble(source: &str, origin: u32) -> Result<Assembly, Vec<Diagnostic>> {
+    assemble_with_symbols(source, origin, &BTreeMap::new())
+}
+
+pub fn assemble_with_symbols(
+    source: &str,
+    origin: u32,
+    external_symbols: &BTreeMap<String, u32>,
+) -> Result<Assembly, Vec<Diagnostic>> {
     if source.len() > MAX_SOURCE_BYTES {
         return Err(vec![diag("ASM_SOURCE_LIMIT", 1, 1, "source exceeds 1 MiB")]);
     }
@@ -57,7 +65,7 @@ pub fn assemble(source: &str, origin: u32) -> Result<Assembly, Vec<Diagnostic>> 
 
     let mut diagnostics = Vec::new();
     let lines = parse_lines(source, &mut diagnostics);
-    let mut symbols = BTreeMap::new();
+    let mut symbols = external_symbols.clone();
     let mut pc = u64::from(origin);
     for line in &lines {
         if let Some(label) = &line.label {

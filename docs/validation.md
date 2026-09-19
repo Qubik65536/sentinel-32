@@ -49,19 +49,30 @@ The OpenAI test backend and hackathon `llama.cpp` backend consume the same local
 
 ## Current validation record
 
-On 2026-09-19, the interpreter-enabled workspace passed `cargo fmt --check`,
+On 2026-09-19, the hardware-manifest workspace passed `cargo fmt --check`,
 `cargo clippy --workspace --all-targets -- -D warnings`, and
-`cargo test --workspace`. Thirty-two tests cover all 50 golden decoder/encoder and
-source-assembly vectors; assembler syntax and failures; every interpreter
+`cargo test --workspace`. Forty-four tests cover all 50 golden decoder/encoder
+and source-assembly vectors; assembler syntax and failures; every interpreter
 operation family; signed and unsigned arithmetic; branch, jump, and link
 behavior; reset and `R0`; sparse mappings, permissions, capabilities, and stack
 bounds; stable trap classes and precedence; atomic fault behavior; full-cost
-cycle-budget refusal; and end-to-end countdown assembly and execution.
+cycle-budget refusal; and end-to-end countdown assembly and execution. The
+scenario tests cover strict source rejection, typed schema/semantic/coverage
+errors, stable canonical hashes, presentation separation, clean and stable MMIO
+allocation, reproducible symbols, every dynamic operation and fault family,
+one-shot faults, priority, deterministic phase progression, and firmware access
+to hardware-only YAML-allocated MMIO. The integration test observes the two
+assembly-issued actuator requests in order and verifies the final request.
 
 The host `run examples/countdown.s32 9` case halts after nine steps and cycles
 with `PC=0x00000014` and `R1=0`. Budget 8 is rejected before `HALT` with exit
-code 2. A clean QNX SDP 8.0 Build 14 workspace release cross-build for
-`aarch64-unknown-nto-qnx800` passed and produced an AArch64 QNX PIE with SHA-256
-`7ac82a528974f75ea56e6ac4378b4029e7e9da3f8956a82d147c072d1d91fab4`.
-Execution of this interpreter-enabled artifact on the Raspberry Pi 5 remains
-to be captured; the exact operator procedure is in `docs/development.md`.
+code 2. A prior clean QNX SDP 8.0 Build 14 workspace release cross-build for
+`aarch64-unknown-nto-qnx800` produced an AArch64 QNX PIE with SHA-256
+`50a2c8546e1f256f85d7429b7f1b3e68409559fbc13cdcab6b88cb6824146aae`.
+The current hardware manifest compiles to bundle hash
+`e022adf0b5591401bb229cf0b79b3772aa142cacf9e823167ea93015b8d2e196`.
+Its host run records `open` followed by `closed` and halts after 17 instructions
+and 19 virtual cycles. The current QNX link was attempted but the local QNX
+license lock timed out, so the earlier binary hash is not evidence for this
+source. QNX cross-build and Raspberry Pi 5 execution remain to be captured; the
+exact operator procedure is in `docs/development.md`.

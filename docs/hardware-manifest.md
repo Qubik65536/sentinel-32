@@ -1,0 +1,23 @@
+# Hardware manifest v0
+
+`sentinel.hardware/v0` is the small lab-runner inventory format. It declares
+which MMIO registers exist. It does not declare phases, transitions, rules,
+dynamics, faults, timing, or actions. S32 firmware controls the order of
+actuator requests when it runs.
+
+The root keys are `schema`, `id`, `publication`, `types`, `telemetry`,
+`actuators`, and `feedback`. Unknown keys are rejected. `types` maps enum names
+to ordered `variants`; the zero-based variant position is its MMIO integer.
+Each register has `type`, `unit`, optional numeric `range`, and `initial`.
+`initial` is the register's reset value, not a scheduled action.
+
+The compiler allocates telemetry from `0x40000000`, actuator-request registers
+from `0x50000000`, and feedback from `0x60000000`. Firmware receives read-only
+telemetry and feedback capabilities and write-only actuator-request
+capabilities. A request remains subject to the independent deterministic safety
+and output-gating boundary; the lab runner does not grant direct physical output
+authority.
+
+`examples/lab-scenario.yaml` is the canonical hardware-only example.
+`examples/full-scenario.yaml` remains the full `sentinel.scenario/v0` compiler
+fixture for policy, phase, dynamics, and fault tests.

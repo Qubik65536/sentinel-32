@@ -1,0 +1,16 @@
+[package]
+name = "sentinel-scenario"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+unicode-normalization = "0.1"
+yaml-rust2 = "=0.10.4"
+
+[lints]
+workspace = true
