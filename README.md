@@ -130,6 +130,7 @@ Start with [project scope](docs/project.md), [architecture](docs/architecture.md
 must follow [AGENTS.md](AGENTS.md) and select work from
 [.agent/plan.md](.agent/plan.md).
 
-The [advisory AI user guide](docs/ai-user-guide.md) gives the deployment-server
-launch, authenticated `llama.cpp` configuration, rocket snapshot example,
-QNX commands, OpenAI development check, and failure-isolation procedure.
+The [QNX command-line demo](docs/demo.md) gives the exact target commands and
+the visible result of each step. The [advisory AI user guide](docs/ai-user-guide.md)
+adds deployment-server setup, configuration, OpenAI development checks, and
+troubleshooting.
