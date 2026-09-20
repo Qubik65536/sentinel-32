@@ -41,7 +41,69 @@ export S32_AI_MAX_OUTPUT_TOKENS=512
 **Shows:** no output. These variables select the absolute QNX configuration
 path and give the small local model enough time to answer.
 
-## 3. Check the AI service
+## 3. Display, assemble, and run pure S32 assembly
+
+```sh
+cat /data/home/qnxuser/sentinel-32/examples/countdown.asm
+```
+
+**Shows:** a standalone S32 program with an entry label, the `li` assembler
+pseudo-instruction, a decrementing loop, a conditional branch, and `halt`. It
+does not use a scenario, hardware inventory, AI service, or MMIO.
+
+```sh
+./sentinel-app check \
+  /data/home/qnxuser/sentinel-32/examples/countdown.asm
+```
+
+**Shows:** the assembler validates the source and reports its encoded size and
+entry address:
+
+```text
+valid: 20 bytes, entry=0x00000000
+```
+
+```sh
+./sentinel-app assemble \
+  /data/home/qnxuser/sentinel-32/examples/countdown.asm
+```
+
+**Shows:** the five real 32-bit instructions produced by the assembler. The
+single `li r1, 3` source line expands to `lui` and `ori`:
+
+```text
+00000000: 3C010000
+00000004: 34210003
+00000008: 2421FFFF
+0000000C: 1420FFFE
+00000010: F8000000
+```
+
+```sh
+./sentinel-app assemble \
+  /data/home/qnxuser/sentinel-32/examples/countdown.asm \
+  /data/home/qnxuser/sentinel-32/artifacts/countdown.bin
+```
+
+**Shows:** `wrote 20 bytes` and creates the raw assembled program at the given
+artifact path.
+
+```sh
+./sentinel-app run \
+  /data/home/qnxuser/sentinel-32/examples/countdown.asm \
+  9
+```
+
+**Shows:** the reference emulator executes exactly nine instructions and nine
+virtual cycles. The loop finishes with `R01=0`, the stack pointer remains at
+`R29=0x20010000`, and the PC advances past `halt`:
+
+```text
+status=halted steps=9 cycles=9 pc=0x00000014 hi=0x00000000 lo=0x00000000
+R00=0x00000000 R01=0x00000000 ...
+```
+
+## 4. Check the AI service
 
 ```sh
 ./sentinel-app ai-health deployment
@@ -50,7 +112,7 @@ path and give the small local model enough time to answer.
 **Shows:** one `ai-health status=ready` line with the `llama.cpp` build, the
 `qwen2.5-1.5b` alias, and the configured GGUF SHA-256.
 
-## 4. Display the rocket advisory input
+## 5. Display the rocket advisory input
 
 ```sh
 cat /data/home/qnxuser/sentinel-32/examples/ai/rocket-pressure-snapshot.json
@@ -62,7 +124,7 @@ cat /data/home/qnxuser/sentinel-32/examples/ai/rocket-written-rules.json
 with `90000` and require range clearance. These are prepared demonstration
 inputs; they are not measurements produced by the assembly controller.
 
-## 5. Ask for rocket mission advice
+## 6. Ask for rocket mission advice
 
 ```sh
 export S32_AI_RULES_PATH=/data/home/qnxuser/sentinel-32/examples/ai/rocket-written-rules.json
@@ -79,7 +141,7 @@ model response should flag the supplied `telemetry.fuel_pressure=95000` and
 can vary. Do not pipe this command through the mission-output `grep`; doing so
 hides the indented JSON rationale lines.
 
-## 6. Run the rocket mission
+## 7. Run the rocket mission
 
 ```sh
 ./sentinel-app mission-run \
@@ -103,10 +165,10 @@ operation=complete firmware_status=halted firmware_steps=248 firmware_cycles=391
 
 The feedback-mismatch events are visible one-tick simulated feedback delays.
 The deterministic rule layer holds progression until feedback agrees. The
-`95000` advisory value from step 5 does not appear here because this command
+`95000` advisory value from step 6 does not appear here because this command
 does not consume the prepared AI snapshot.
 
-## 7. Display a proposed tank action
+## 8. Display a proposed tank action
 
 ```sh
 cat /data/home/qnxuser/sentinel-32/examples/ai/tank-proposed-action-snapshot.json
@@ -117,7 +179,7 @@ cat /data/home/qnxuser/sentinel-32/examples/ai/tank-written-rules.json
 normalized tank pressure of `50000`, plus the written rules used to review it.
 The proposal is data for the advisory checker and cannot write an actuator.
 
-## 8. Ask for tank mission advice
+## 9. Ask for tank mission advice
 
 ```sh
 export S32_AI_RULES_PATH=/data/home/qnxuser/sentinel-32/examples/ai/tank-written-rules.json
@@ -129,7 +191,7 @@ export S32_AI_RULES_PATH=/data/home/qnxuser/sentinel-32/examples/ai/tank-written
 **Shows:** an authority-free advisory response that should identify the
 simultaneous-open proposal. It does not approve, deny, or execute that action.
 
-## 9. Run the tank mission
+## 10. Run the tank mission
 
 ```sh
 ./sentinel-app mission-run \
@@ -146,7 +208,7 @@ with output equivalent to:
 operation=complete firmware_status=halted firmware_steps=203 firmware_cycles=257 simulated_seconds=21 final_requests=[actuator.inlet_valve=closed,actuator.outlet_valve=closed]
 ```
 
-## 10. Show that mission control does not depend on AI
+## 11. Show that mission control does not depend on AI
 
 Stop `llama-server` in the first terminal with `Ctrl-C`. Then run in the second
 terminal:
@@ -169,7 +231,7 @@ unavailable.
 only removes advisory output; it cannot authorize, deny, interrupt, or alter
 mission outputs.
 
-## 11. Clear the demo overrides
+## 12. Clear the demo overrides
 
 ```sh
 unset S32_AI_CONFIG_PATH

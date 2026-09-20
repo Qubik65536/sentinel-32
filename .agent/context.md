@@ -80,9 +80,9 @@ Current requirements give AI one advisory function: compare a bounded current-st
 - `docs/configuration.md`: intended configuration for core services and the advisory checker backends.
 - `docs/advisory-ai.md`: exact provider-neutral snapshot, written-rule, finding, hash, limit, and authority contract.
 - `docs/ai-user-guide.md`: deployment-server, QNX client, rocket sample, OpenAI test, and failure-isolation procedure.
-- `docs/demo.md`: command-first QNX demonstration of live advisory checks,
-  persistent rocket and tank assembly missions, and control independence when
-  the AI server is stopped.
+- `docs/demo.md`: command-first QNX demonstration of standalone S32 assembly
+  and emulation, live advisory checks, persistent rocket and tank assembly
+  missions, and control independence when the AI server is stopped.
 - `docs/s32-isa.md`: accepted ISA v0 contract; implemented incrementally under `ISA-002` and `VM-001`.
 - `docs/scenario-schema.md`: accepted schema v0 contract and the concrete forms implemented by `SCEN-002`.
 - `crates/sentinel-core`: portable S32 ISA, assembler, VM, memory, traps, cycles, and tests.

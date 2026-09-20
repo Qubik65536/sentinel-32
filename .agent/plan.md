@@ -331,12 +331,13 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 - **Description:** Package the three-minute narrative, recovery, evidence, and honest limitations using the setup guide.
 - **Acceptance:** A fresh supported environment can reproduce the build/deploy/demo; safe and unsafe validation, advisory written-rule finding, shadow, activation, corruption, checker loss, and controller-hang cases work; deployment-server `llama.cpp` and OpenAI test evidence are clearly distinguished; exact tested versions and hashes are recorded; safety-case summary maps claims to mechanisms/tests and discloses gaps.
 - **Progress:** `docs/demo.md` now provides the implemented QNX CLI sequence
-  for service health, prepared rocket and tank advisory inputs, both persistent
-  assembly missions, expected output cues, and AI-service-loss isolation. It
-  explicitly distinguishes the synthetic `95000` rocket snapshot value from
-  the controller's live `50000` target. The remaining acceptance items depend
-  on the unimplemented lifecycle, shadow, corruption, watchdog, and evidence
-  work listed in this task's dependencies.
+  for standalone S32 source inspection, validation, encoding, binary output,
+  and emulation; service health; prepared rocket and tank advisory inputs;
+  both persistent assembly missions; expected output cues; and AI-service-loss
+  isolation. It explicitly distinguishes the synthetic `95000` rocket
+  snapshot value from the controller's live `50000` target. The remaining
+  acceptance items depend on the unimplemented lifecycle, shadow, corruption,
+  watchdog, and evidence work listed in this task's dependencies.
 
 ## Critical path
 
