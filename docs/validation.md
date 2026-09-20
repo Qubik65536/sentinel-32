@@ -115,7 +115,7 @@ the same licensed final-link step. Live QNX `llama-server` requests have since
 reached the service, but no response has yet passed the complete advisory
 contract. No live OpenAI result is claimed in this record.
 
-The host lane passes 71 tests after adding the deployed
+The host lane passes 72 tests after adding the deployed
 `llama-server` compatibility case. That case reproduces a successful `stop`
 completion with schema-valid content inside one whole-response Markdown JSON
 fence. The adapter removes that wrapper and then runs the unchanged strict
@@ -127,3 +127,7 @@ The QNX-modified toolchain also completed `cargo +qnx800 check --workspace
 Parser tests now distinguish malformed completion envelopes from malformed
 findings JSON. The optional bounded diagnostic capture is an operator aid, not
 safety evidence, and remains disabled unless explicitly configured.
+The request-shape regression test verifies that the schema is present in both
+the nested OpenAI-compatible `response_format.json_schema.schema` location and
+llama.cpp's top-level `json_schema` location. The previously used direct
+`response_format.schema` field is absent.

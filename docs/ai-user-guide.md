@@ -168,7 +168,10 @@ Qwen2.5 1.5B can fail the strict output contract. Such output is rejected and
 reported as checker unavailable; it is never repaired into an authoritative
 result. The deployment request disables model reasoning, caps citation-array
 and rationale lengths, and reports a token-limited completion separately from
-malformed output.
+malformed output. It sends both the OpenAI-compatible nested
+`response_format.json_schema` wrapper and llama.cpp's top-level `json_schema`
+field so the deployed server constrains generation before the client applies
+its independent strict parser and semantic validator.
 
 On QNX, capture one failing response with:
 

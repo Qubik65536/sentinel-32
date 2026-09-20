@@ -49,6 +49,11 @@ QNX run. A subsequent live run still returned an invalid provider response;
 the client now reports which response stage failed and supports an explicit,
 bounded raw-response capture path for diagnosis. Capture is disabled by
 default, and the client does not add the provider credential to it.
+The captured response contained an unconstrained singular `finding` object,
+proving that the deployed server ignored the adapter's direct
+`response_format.schema` field. The request now sends the official nested
+`response_format.json_schema` wrapper and the llama.cpp-native top-level
+`json_schema` constraint while preserving strict local validation.
 
 Canonical S32 source presentation uses lowercase MIPS-style mnemonics,
 directives, and registers with spaced operands. Markdown source examples use
