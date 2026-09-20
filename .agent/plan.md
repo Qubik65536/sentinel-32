@@ -53,6 +53,30 @@ longer drive the roadmap.
 
 ## Ratatui TUI
 
+### TUI-008 — Scroll and decode Run panes
+
+- **Category / status:** UI / complete (2026-09-20)
+- **Dependencies:** TUI-005
+- **Description:** Make the Run view's assembly and register panes independently
+  scrollable by focus and show each register in hexadecimal, ASCII, and unsigned
+  decimal forms.
+- **Acceptance:** `Tab`/`Shift+Tab` focus selects which supported pane receives
+  `j`/`k` or arrow scrolling; assembly and register offsets are independent and
+  bounded; all 32 registers plus `HI`, `LO`, and `PC` expose all three forms;
+  printable ASCII is decoded deterministically with nonprintable bytes marked;
+  alignment uses the widest ASCII field; compact terminals remain usable;
+  help, guide, design, demo, context, tests, host validation, and QNX
+  cross-check agree with the behavior.
+- **Evidence:** `RunnerView` stores independent bounded assembly/register
+  offsets and routes scrolling by focused pane. Wide and 80-column buffer tests
+  cover aligned hex/ASCII/unsigned-decimal output; reducer tests cover
+  independent movement and both bounds. Help, user guide, design, demo,
+  context, and validation records describe the controls and decoding. Format,
+  strict Clippy, all 83 host tests, QNX release check, and licensed QNX final
+  link pass. The linked AArch64 QNX PIE has SHA-256
+  `7ec179df1a3f805215f366a9bff7a117d3afae5952faf74133915f27691a177c`;
+  target execution remains to be refreshed in an authenticated session.
+
 ### DEMO-001 — Replace the minimal standalone assembly demonstration
 
 - **Category / status:** demonstration / complete (2026-09-20)

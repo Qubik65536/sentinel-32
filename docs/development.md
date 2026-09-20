@@ -462,6 +462,14 @@ syntax on the host. QNX also reports dimensions as `rows=height,width` in
 `stty size`. The final target smoke verified idle polling, batched keys, and
 live resize without an extra newline.
 
+The later Run-pane scrolling and register-decoding update completed the QNX
+release check and licensed final link. `file` identifies the result as an
+AArch64 QNX PIE using `/usr/lib/ldqnx-64.so.2`; its SHA-256 is
+`7ec179df1a3f805215f366a9bff7a117d3afae5952faf74133915f27691a177c`.
+This candidate still requires upload and an SSH-terminal check of independent
+Assembly/Register scrolling and the wide/compact register layouts before it is
+target-execution evidence.
+
 ## Required BUILD-001 evidence
 
 Capture and commit non-secret evidence for:

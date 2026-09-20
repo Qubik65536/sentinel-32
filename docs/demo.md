@@ -58,7 +58,10 @@ status bar reports that the source assembled and the runner was reset. Press
 2. Press `2` for Run. Press `s` repeatedly to watch stack allocation, `li`
    expansion, and the first memory write. `n` executes up to ten bounded
    instructions; use it to reach the `jal` and then step into the analysis
-   loop. `Space` starts or pauses timed execution. The run ends halted after
+   loop. The Registers pane shows every value in hexadecimal, decoded ASCII,
+   and unsigned decimal. Press `Tab` until Assembly or Registers has the cyan
+   border, then use `j`/`k` or the arrow keys to scroll that pane independently.
+   `Space` starts or pauses timed execution. The run ends halted after
    91 instructions and 112 cycles with sum `R02=66`, maximum `R03=25`,
    threshold count `R07=3`, average `R08=13`, remainder `R09=1`,
    `HI=1`, `LO=13`, restored `R29=0x20010000`, and `PC=0x00000070`.

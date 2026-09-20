@@ -78,7 +78,11 @@ does not silently save on exit.
 The Run view uses the last successfully assembled program. It keeps the
 instruction list, program counter, all 32 registers, `HI`, `LO`, status, steps,
 cycles, memory mappings, latest register changes, and writes in one coherent
-post-step display.
+post-step display. Each register value appears simultaneously as eight-digit
+hexadecimal, decoded ASCII, and unsigned decimal. ASCII decoding reads the
+four bytes from most significant to least significant, omits leading zero
+bytes, and displays a `.` for every remaining nonprintable byte. The ASCII
+column is padded to the longest decoded value so the decimal separators align.
 
 | Key | Action |
 |---|---|
@@ -86,11 +90,14 @@ post-step display.
 | `n` | Execute up to ten instructions, stopping on halt or trap |
 | `c` or `Space` | Run or pause bounded execution |
 | `r` | Reset from the current successful assembly |
-| `j`, `k` or arrows | Scroll disassembly |
+| `Tab` or `Shift+Tab` | Focus Assembly/disassembly, Mappings, Registers, or Status |
+| `j`, `k` or arrows | Scroll Assembly or Registers when that pane has focus |
 
 Running stops on `halt`, a typed trap, or the configured cycle budget. Changed
 registers carry a `*` marker as well as color, so the display remains useful in
-a monochrome terminal.
+a monochrome terminal. Assembly and register scroll positions are independent
+and bounded. On a narrow supported terminal, each register uses two display
+lines so none of the three representations is discarded.
 
 ## Mission
 

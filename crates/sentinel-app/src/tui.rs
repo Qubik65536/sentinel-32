@@ -256,12 +256,8 @@ impl App {
                             .map_or_else(|error| error, |()| "runner reset".to_owned());
                     }
                 }
-                Key::Up | Key::Char('k') => {
-                    self.runner.scroll = self.runner.scroll.saturating_sub(1)
-                }
-                Key::Down | Key::Char('j') => {
-                    self.runner.scroll = self.runner.scroll.saturating_add(1)
-                }
+                Key::Up | Key::Char('k') => self.runner.scroll_focused(self.focus, false),
+                Key::Down | Key::Char('j') => self.runner.scroll_focused(self.focus, true),
                 _ => {}
             },
             View::Mission => match key {
@@ -603,7 +599,8 @@ struct RunnerView {
     latest: String,
     writes: Vec<String>,
     running: bool,
-    scroll: usize,
+    assembly_scroll: usize,
+    register_scroll: usize,
     last_advance: Instant,
 }
 
@@ -619,7 +616,8 @@ impl RunnerView {
             latest: "not loaded".to_owned(),
             writes: Vec::new(),
             running: false,
-            scroll: 0,
+            assembly_scroll: 0,
+            register_scroll: 0,
             last_advance: Instant::now(),
         }
     }
@@ -633,7 +631,27 @@ impl RunnerView {
         self.latest = "ready".to_owned();
         self.writes.clear();
         self.running = false;
+        self.assembly_scroll = 0;
+        self.register_scroll = 0;
         Ok(())
+    }
+
+    fn scroll_focused(&mut self, focus: usize, down: bool) {
+        let (scroll, item_count) = match focus {
+            0 => (
+                &mut self.assembly_scroll,
+                self.assembly
+                    .as_ref()
+                    .map_or(0, |assembly| assembly.bytes.len() / 4),
+            ),
+            2 => (&mut self.register_scroll, 35),
+            _ => return,
+        };
+        if down {
+            *scroll = scroll.saturating_add(1).min(item_count.saturating_sub(1));
+        } else {
+            *scroll = scroll.saturating_sub(1);
+        }
     }
 
     fn step(&mut self) -> Result<(), String> {
@@ -996,7 +1014,7 @@ fn render_runner(frame: &mut ratatui::Frame<'_>, area: Rect, app: &App) {
                 .bytes
                 .chunks_exact(4)
                 .enumerate()
-                .skip(app.runner.scroll)
+                .skip(app.runner.assembly_scroll)
                 .map(|(index, bytes)| {
                     let address = assembly.origin + index as u32 * 4;
                     let word = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
@@ -1014,8 +1032,23 @@ fn render_runner(frame: &mut ratatui::Frame<'_>, area: Rect, app: &App) {
                 .collect()
         },
     );
+    let instruction_count = app
+        .runner
+        .assembly
+        .as_ref()
+        .map_or(0, |assembly| assembly.bytes.len() / 4);
     frame.render_widget(
-        List::new(instructions).block(panel(" Assembly / disassembly ", app.focus == 0)),
+        List::new(instructions).block(panel(
+            &format!(
+                " Assembly / disassembly [{}/{}] ",
+                app.runner
+                    .assembly_scroll
+                    .saturating_add(1)
+                    .min(instruction_count),
+                instruction_count
+            ),
+            app.focus == 0,
+        )),
         left[0],
     );
     let mapping = vec![
@@ -1041,29 +1074,45 @@ fn render_runner(frame: &mut ratatui::Frame<'_>, area: Rect, app: &App) {
             let mut values = (0..32)
                 .filter_map(|index| {
                     let register = Register::new(index as u8)?;
-                    let changed = app.runner.changed.contains(&index);
-                    Some(
-                        ListItem::new(format!(
-                            "{}r{index:02} 0x{:08X}",
-                            if changed { "*" } else { " " },
-                            machine.register(register)
-                        ))
-                        .style(if changed {
-                            Style::default().fg(Color::LightYellow)
-                        } else {
-                            Style::default()
-                        }),
-                    )
+                    Some((
+                        format!("r{index:02}"),
+                        machine.register(register),
+                        app.runner.changed.contains(&index),
+                    ))
                 })
                 .collect::<Vec<_>>();
-            values.push(ListItem::new(format!(" hi  0x{:08X}", machine.hi())));
-            values.push(ListItem::new(format!(" lo  0x{:08X}", machine.lo())));
-            values.push(ListItem::new(format!(" pc  0x{:08X}", machine.pc())));
+            values.push(("hi".to_owned(), machine.hi(), false));
+            values.push(("lo".to_owned(), machine.lo(), false));
+            values.push(("pc".to_owned(), machine.pc(), false));
+            let ascii_width = values
+                .iter()
+                .map(|(_, value, _)| decode_ascii(*value).len())
+                .max()
+                .unwrap_or(0)
+                .max(1);
             values
+                .into_iter()
+                .skip(app.runner.register_scroll)
+                .map(|(label, value, changed)| {
+                    register_item(
+                        &label,
+                        value,
+                        changed,
+                        ascii_width,
+                        right[0].width.saturating_sub(2),
+                    )
+                })
+                .collect()
         },
     );
     frame.render_widget(
-        List::new(registers).block(panel(" Registers (* changed) ", app.focus == 2)),
+        List::new(registers).block(panel(
+            &format!(
+                " Registers HEX | ASCII | UDEC [{}/35] (* changed) ",
+                app.runner.register_scroll.saturating_add(1).min(35)
+            ),
+            app.focus == 2,
+        )),
         right[0],
     );
     let status_style =
@@ -1082,6 +1131,50 @@ fn render_runner(frame: &mut ratatui::Frame<'_>, area: Rect, app: &App) {
             .block(panel(" Machine status ", app.focus == 3)),
         right[1],
     );
+}
+
+fn decode_ascii(value: u32) -> String {
+    let bytes = value.to_be_bytes();
+    let first = bytes
+        .iter()
+        .position(|byte| *byte != 0)
+        .unwrap_or(bytes.len());
+    bytes[first..]
+        .iter()
+        .map(|byte| {
+            if byte.is_ascii_graphic() || *byte == b' ' {
+                char::from(*byte)
+            } else {
+                '.'
+            }
+        })
+        .collect()
+}
+
+fn register_item(
+    label: &str,
+    value: u32,
+    changed: bool,
+    ascii_width: usize,
+    pane_width: u16,
+) -> ListItem<'static> {
+    let marker = if changed { '*' } else { ' ' };
+    let ascii = decode_ascii(value);
+    let lines = if pane_width >= 38 {
+        vec![Line::from(format!(
+            "{marker}{label:<3} 0x{value:08X} | \"{ascii:<ascii_width$}\" | {value:>10}"
+        ))]
+    } else {
+        vec![
+            Line::from(format!("{marker}{label:<3} 0x{value:08X}")),
+            Line::from(format!("\"{ascii:<ascii_width$}\" | {value}")),
+        ]
+    };
+    ListItem::new(lines).style(if changed {
+        Style::default().fg(Color::LightYellow)
+    } else {
+        Style::default()
+    })
 }
 
 fn render_mission(frame: &mut ratatui::Frame<'_>, area: Rect, app: &App) {
@@ -1324,7 +1417,8 @@ fn render_help(frame: &mut ratatui::Frame<'_>, area: Rect) {
             [
                 "GLOBAL: 1..4 view | Tab/Shift+Tab focus | Ctrl+P open | ? help | q quit",
                 "ASSEMBLE: a assemble | e edit | w save | l reload | arrows scroll/move",
-                "RUN: s/Enter step | n next 10 | c/Space run/pause | r reset | j/k scroll",
+                "RUN: s/Enter step | n next 10 | c/Space run/pause | r reset",
+                "     Tab focus | j/k or arrows scroll focused Assembly/Registers pane",
                 "MISSION: t tank/rocket | m execute | Space play | arrows frame | r rewind",
                 "ADVISORY: a evaluate configured snapshot/rules/provider | j/k scroll",
                 "",
@@ -1368,7 +1462,7 @@ fn key_help(view: View) -> &'static str {
             "a assemble  e edit  w save  l reload  Ctrl+P open  1..4 views  ? help  q quit"
         }
         View::Run => {
-            "s step  n next-10  c/Space run-pause  r reset  j/k scroll  1..4 views  ? help  q quit"
+            "s step  n next-10  c/Space run-pause  r reset  Tab pane  j/k scroll  ? help  q quit"
         }
         View::Mission => {
             "t tank-rocket  m execute  Space play  arrows frame  r rewind  ? help  q quit"
@@ -1814,6 +1908,94 @@ mod tests {
         assert_eq!(app.runner.steps, 3);
         assert!(app.runner.changed.contains(&1));
         assert!(app.runner.latest.contains("pc=0x00000008"));
+    }
+
+    #[test]
+    fn runner_scrolls_assembly_and_registers_independently_and_with_bounds() {
+        let source = resolve_asset("examples/sample-analysis.asm");
+        let mut app = App::new(source);
+        app.view = View::Run;
+        app.focus = 0;
+        app.handle_key(Key::Down);
+        app.handle_key(Key::Char('j'));
+        app.focus = 2;
+        app.handle_key(Key::Down);
+        assert_eq!(app.runner.assembly_scroll, 2);
+        assert_eq!(app.runner.register_scroll, 1);
+
+        for _ in 0..100 {
+            app.focus = 0;
+            app.handle_key(Key::Down);
+            app.focus = 2;
+            app.handle_key(Key::Down);
+        }
+        assert_eq!(app.runner.assembly_scroll, 46);
+        assert_eq!(app.runner.register_scroll, 34);
+        app.focus = 1;
+        app.handle_key(Key::Up);
+        assert_eq!(app.runner.assembly_scroll, 46);
+        assert_eq!(app.runner.register_scroll, 34);
+        app.focus = 0;
+        app.handle_key(Key::Char('k'));
+        app.focus = 2;
+        app.handle_key(Key::Up);
+        assert_eq!(app.runner.assembly_scroll, 45);
+        assert_eq!(app.runner.register_scroll, 33);
+    }
+
+    #[test]
+    fn runner_renders_hex_ascii_and_unsigned_decimal_register_forms() {
+        assert_eq!(decode_ascii(0), "");
+        assert_eq!(decode_ascii(0x41), "A");
+        assert_eq!(decode_ascii(0x4142_4344), "ABCD");
+        assert_eq!(decode_ascii(0x410A_7C00), "A.|.");
+
+        let source = resolve_asset("examples/sample-analysis.asm");
+        let mut app = App::new(source);
+        app.view = View::Run;
+        let register = Register::new(12).expect("valid test register");
+        app.runner
+            .machine
+            .as_mut()
+            .expect("runner machine")
+            .set_register(register, 0x4142_4344);
+        let backend = TestBackend::new(140, 40);
+        let mut terminal = Terminal::new(backend).expect("test terminal");
+        terminal
+            .draw(|frame| render_app(frame, &app))
+            .expect("draw");
+        let content = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(content.contains("0x41424344"));
+        assert!(content.contains("\"ABCD\""));
+        assert!(content.contains("1094861636"));
+
+        let register = Register::new(1).expect("valid compact test register");
+        app.runner
+            .machine
+            .as_mut()
+            .expect("runner machine")
+            .set_register(register, 0x41);
+        let backend = TestBackend::new(80, 30);
+        let mut terminal = Terminal::new(backend).expect("compact test terminal");
+        terminal
+            .draw(|frame| render_app(frame, &app))
+            .expect("compact draw");
+        let content = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(content.contains("0x00000041"));
+        assert!(content.contains("\"A   \""));
+        assert!(content.contains("65"));
     }
 
     #[test]

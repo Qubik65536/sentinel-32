@@ -32,9 +32,11 @@ The application pins Ratatui 0.29.0 without optional backends and implements a
 safe ANSI/`stty` backend that contains no FFI or `unsafe` code. It supports
 keyboard navigation, resize polling, compact terminals, bounded source
 editing with save-conflict detection, assembly symbols/encodings, coherent VM
-stepping and run/pause, tank/rocket mission playback, and asynchronous advisory
-checks with a permanent no-authority banner. It consumes typed Rust results and
-does not parse CLI output.
+stepping and run/pause, independently scrollable Run assembly/register panes,
+aligned hexadecimal/ASCII/unsigned-decimal register rendering, tank/rocket
+mission playback, and asynchronous advisory checks with a permanent
+no-authority banner. It consumes typed Rust results and does not parse CLI
+output.
 
 `examples/rocket-launch-default.yaml` is the default normalized launch-pad
 digital twin. It compiles to 23 MMIO slots and exercises both pressure
@@ -140,8 +142,8 @@ Current requirements give AI one advisory function: compare a bounded current-st
 Host checks use upstream Rust 1.98.1 on `x86_64-unknown-linux-gnu`. Ratatui TUI
 unit/buffer tests and a real host PTY render/input/restore smoke pass. QNX SDP
 8.0 Build 14 and linked toolchain `qnx800` (Rust 1.85.1-dev) complete the
-AArch64 QNX 8.0 release cross-build with the custom ANSI backend. The release
-binary has SHA-256
+AArch64 QNX 8.0 release cross-build with the custom ANSI backend. The deployed
+and target-executed release binary has SHA-256
 `6f5b7807f4ab4b3f131b0f1f10857313670440bf995b7a68c2e063235f0da324`.
 That exact artifact and fixtures were uploaded and executed on QNX 8.0.0 image
 `2026/06/05-16:21:14EDT` on the Raspberry Pi 5. Through an SSH pseudo-terminal,
@@ -165,7 +167,10 @@ The TUI roadmap is complete. Preserve the CLI for automation and diagnosis and
 keep later changes within the recorded UI and safety boundaries. Copy the
 replacement standalone example to the QNX demo tree during the next
 authenticated target session; the noninteractive refresh attempt was rejected
-by target authentication.
+by target authentication. The current scroll/register-display update links as
+an AArch64 QNX PIE with SHA-256
+`7ec179df1a3f805215f366a9bff7a117d3afae5952faf74133915f27691a177c`;
+upload and target execution of that candidate remain pending authentication.
 
 ## Working tree note
 

@@ -194,3 +194,13 @@ QNX demo tree was rejected by target authentication, so execution of this
 replacement source on the Raspberry Pi remains unavailable until the next
 authenticated target session. The already validated VM binary did not change;
 only the fixture, tests, and documentation changed in this task.
+
+The Run-pane scrolling and register-decoding update passes the 83-test host
+lane: 12 advisory, 17 app/TUI, 31 core, 7 safety, and 16 scenario tests, plus
+empty doc-test suites. Tests prove independent bounded assembly/register
+offsets, hexadecimal/ASCII/unsigned-decimal register output, alignment to the
+widest ASCII value, and the two-line 80-column layout. The QNX release check
+passes. After retrying outside the workspace sandbox so the licensed linker
+could create its lock, the full QNX build produced an AArch64 PIE with SHA-256
+`7ec179df1a3f805215f366a9bff7a117d3afae5952faf74133915f27691a177c`.
+This candidate has not yet been uploaded or executed on the Raspberry Pi.

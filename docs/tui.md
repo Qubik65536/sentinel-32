@@ -111,11 +111,11 @@ than guessing.
 ## Run view
 
 ```text
-+ assembly/disassembly -------------------+ registers ----------------------+
-| 00000000  addi r1, r0, 3                | r00 00000000  r01 00000003 *    |
-|>00000004  addi r1, r1, -1               | ...                             |
-| 00000008  bne r1, r0, loop              | r31 00000000  hi 00000000       |
-|                                         | lo 00000000  pc 00000004        |
++ assembly/disassembly [1/47] ------------+ registers HEX | ASCII | UDEC ---+
+| 00000000  addiu sp, sp, -32             | r00 0x00000000 | ""   | 0      |
+|>00000004  lui r1, 0                      |*r01 0x0000000C | "."  | 12     |
+| 00000008  ori r1, r1, 12                | ...                             |
+|                                         | pc  0x00000008 | "."  | 8      |
 + memory / mappings ----------------------+ latest step --------------------+
 | program rx 00000000..                   | cost 1  cycles 2/9              |
 | stack   rw 20000000..                   | r1: 3 -> 2                      |
@@ -126,7 +126,13 @@ than guessing.
 Changed values receive both a style and a textual marker so color is not the
 only signal. The instruction cursor, register/memory delta, cycle charge, and
 status all come from the same completed step. Run mode repeatedly issues
-bounded steps through the same session API and remains interruptible. A
+bounded steps through the same session API and remains interruptible. Assembly
+and Registers retain separate bounded scroll offsets; `Tab` selects the pane
+and `j`/`k` or arrow keys scroll the focused one. Registers show hexadecimal,
+ASCII, and unsigned decimal simultaneously. ASCII is decoded most-significant
+byte first after leading zero bytes, nonprintable bytes become `.`, and the
+widest decoded value determines column padding. Narrow layouts use two lines
+per register. A
 breakpoint, if implemented, pauses before a matching PC and does not modify VM
 memory or instruction semantics.
 
