@@ -53,6 +53,7 @@ cargo run -p sentinel-app -- check examples/countdown.asm
 cargo run -p sentinel-app -- assemble examples/countdown.asm
 cargo run -p sentinel-app -- assemble examples/countdown.asm countdown.bin
 cargo run -p sentinel-app -- run examples/countdown.asm 9
+cargo run -p sentinel-app -- step examples/countdown.asm 9
 ```
 
 The assembler supports all v0 instructions, labels, comments, `sp`/`fp`/`ra`,
@@ -66,6 +67,11 @@ The `run` command requires a positive virtual-cycle budget. Its lab manifest
 maps the assembled program read/execute and provides one 64 KiB read/write
 stack capability; it grants no data or MMIO capabilities. The countdown should
 halt after nine instructions with nine cycles, `PC=0x00000014`, and `R1=0`.
+The interactive `step` command uses the same manifest and cycle budget. Enter
+or `s` executes one instruction, `s N` executes a bounded group, `r` displays
+registers, `c` continues, `h` shows help, and `q` exits without executing more
+instructions. Each step reports the decoded instruction, cycle charge, next
+PC, register changes, memory writes, and machine status.
 Target build, transfer, execution, and evidence-capture instructions are in the
 [development guide](docs/development.md#vm-001-raspberry-pi-5-test).
 The documented Raspberry Pi/QNX deployment root is

@@ -103,6 +103,29 @@ status=halted steps=9 cycles=9 pc=0x00000014 hi=0x00000000 lo=0x00000000
 R00=0x00000000 R01=0x00000000 ...
 ```
 
+```sh
+./sentinel-app step \
+  /data/home/qnxuser/sentinel-32/examples/countdown.asm \
+  9
+```
+
+**Shows:** an interactive `s32>` prompt before any instruction runs. Press
+Enter or enter `s` for one instruction, `s 2` for two instructions, `r` for all
+registers, `c` to continue to completion, `h` for help, or `q` to stop. Every
+executed instruction reports its PC, decoded operation, cycle cost, cumulative
+cycles, next PC, status, changed registers, and memory writes:
+
+```text
+s32> step=2 pc=0x00000004 instruction=AluImmediate { ... } cost=1 cycles=2 next_pc=0x00000008 status=running changes=[R01=0x00000003] writes=[]
+```
+
+After nine individual or continued steps, it prints the final register dump
+and:
+
+```text
+stepper-complete status=halted steps=9 cycles=9 pc=0x00000014
+```
+
 ## 4. Check the AI service
 
 ```sh

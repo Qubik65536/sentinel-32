@@ -17,7 +17,10 @@ the deterministic system retains all proceed and output authority.
 The repository has a Rust workspace. `sentinel-core` implements
 typed S32 decode/encode, the source assembler, validated manifests and sparse
 memory, and complete S32 v0 reference execution with permissions, capabilities,
-atomic traps, and deterministic cycle budgets. `sentinel-scenario` implements
+atomic traps, and deterministic cycle budgets. The CLI can run standalone S32
+source to completion or pause it interactively after each instruction while
+showing decoded operations, cycle use, state changes, and memory writes.
+`sentinel-scenario` implements
 bounded strict YAML parsing, typed validation, canonical bundle compilation,
 stable MMIO allocation, generated symbols, and a generic deterministic
 runtime. The app exposes VM and scenario commands, including an end-to-end
@@ -80,9 +83,10 @@ Current requirements give AI one advisory function: compare a bounded current-st
 - `docs/configuration.md`: intended configuration for core services and the advisory checker backends.
 - `docs/advisory-ai.md`: exact provider-neutral snapshot, written-rule, finding, hash, limit, and authority contract.
 - `docs/ai-user-guide.md`: deployment-server, QNX client, rocket sample, OpenAI test, and failure-isolation procedure.
-- `docs/demo.md`: command-first QNX demonstration of standalone S32 assembly
-  and emulation, live advisory checks, persistent rocket and tank assembly
-  missions, and control independence when the AI server is stopped.
+- `docs/demo.md`: command-first QNX demonstration of standalone S32 assembly,
+  interactive instruction stepping, live advisory checks, persistent rocket
+  and tank assembly missions, and control independence when the AI server is
+  stopped.
 - `docs/s32-isa.md`: accepted ISA v0 contract; implemented incrementally under `ISA-002` and `VM-001`.
 - `docs/scenario-schema.md`: accepted schema v0 contract and the concrete forms implemented by `SCEN-002`.
 - `crates/sentinel-core`: portable S32 ISA, assembler, VM, memory, traps, cycles, and tests.

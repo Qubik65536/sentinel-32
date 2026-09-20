@@ -83,8 +83,10 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 - **Progress:** The functional acceptance criteria are implemented without
   dependencies or unsafe code: validated reset, sparse slots, region
   permissions, manifest capabilities, full S32 v0 execution, atomic typed
-  traps, and deterministic cycle budgets. Host fmt, strict clippy, all 32 tests,
-  countdown CLI execution, and the QNX workspace release cross-build pass.
+  traps, deterministic cycle budgets, and an interactive CLI that displays
+  each stepped instruction, cycle charge, register change, memory write, next
+  PC, and status. Host fmt, strict clippy, all 32 core tests, countdown CLI
+  execution, and the QNX workspace release cross-build pass.
   Formal completion waits on the target-side evidence dependency in `BOOT-002`;
   run the current artifact using the `docs/development.md` VM-001 procedure.
 
@@ -332,9 +334,10 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 - **Acceptance:** A fresh supported environment can reproduce the build/deploy/demo; safe and unsafe validation, advisory written-rule finding, shadow, activation, corruption, checker loss, and controller-hang cases work; deployment-server `llama.cpp` and OpenAI test evidence are clearly distinguished; exact tested versions and hashes are recorded; safety-case summary maps claims to mechanisms/tests and discloses gaps.
 - **Progress:** `docs/demo.md` now provides the implemented QNX CLI sequence
   for standalone S32 source inspection, validation, encoding, binary output,
-  and emulation; service health; prepared rocket and tank advisory inputs;
-  both persistent assembly missions; expected output cues; and AI-service-loss
-  isolation. It explicitly distinguishes the synthetic `95000` rocket
+  completion and interactive instruction-level emulation; service health;
+  prepared rocket and tank advisory inputs; both persistent assembly missions;
+  expected output cues; and AI-service-loss isolation. It explicitly
+  distinguishes the synthetic `95000` rocket
   snapshot value from the controller's live `50000` target. The remaining
   acceptance items depend on the unimplemented lifecycle, shadow, corruption,
   watchdog, and evidence work listed in this task's dependencies.

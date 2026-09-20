@@ -242,8 +242,20 @@ status=halted steps=9 cycles=9 pc=0x00000014 hi=0x00000000 lo=0x00000000
 ```
 
 The register dump must show `R01=0x00000000` and `R29=0x20010000`, and the exit
-status must be `0`. Then test that the cycle budget fails closed before the
-ninth instruction:
+status must be `0`.
+
+The same target artifact can pause after each instruction:
+
+```sh
+/data/home/qnxuser/sentinel-32/release/sentinel-app step \
+  /data/home/qnxuser/sentinel-32/examples/countdown.asm 9
+```
+
+Press Enter to step, enter `r` to inspect all registers, and enter `c` to
+finish. The last step must report `instruction=Halt`, and the completion
+line must report `status=halted steps=9 cycles=9 pc=0x00000014`.
+
+Then test that the cycle budget fails closed before the ninth instruction:
 
 ```sh
 /data/home/qnxuser/sentinel-32/release/sentinel-app run \

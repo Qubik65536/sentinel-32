@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs;
+use std::io::{self, BufRead, Write};
 use std::path::Path;
 use std::process::ExitCode;
 use std::sync::OnceLock;
@@ -150,6 +151,13 @@ fn run() -> Result<(), String> {
             let cycle_budget = parse_cycle_budget(cycle_budget)?;
             run_assembly(assembly, cycle_budget)
         }
+        [command, source, cycle_budget] if command == "step" => {
+            let assembly = assemble_file(source)?;
+            let cycle_budget = parse_cycle_budget(cycle_budget)?;
+            let stdin = io::stdin();
+            let stdout = io::stdout();
+            step_assembly(assembly, cycle_budget, stdin.lock(), stdout.lock())
+        }
         [command, source] if command == "scenario-check" => {
             let source = read_text(source)?;
             let compilation = compile(&source, AllocationMode::Clean)
@@ -246,7 +254,7 @@ fn run() -> Result<(), String> {
             Ok(())
         }
         _ => Err(
-            "usage: sentinel-app [decode <word> | check <source.asm> | assemble <source.asm> [output.bin] | run <source.asm> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | mission-run <mission.yaml> <firmware.asm> <cycle-budget> | mission-advice <deployment|development> <snapshot.json> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks> | ai-health <deployment|development> | ai-check <development> <snapshot.json>]"
+            "usage: sentinel-app [decode <word> | check <source.asm> | assemble <source.asm> [output.bin] | run <source.asm> <cycle-budget> | step <source.asm> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | mission-run <mission.yaml> <firmware.asm> <cycle-budget> | mission-advice <deployment|development> <snapshot.json> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks> | ai-health <deployment|development> | ai-check <development> <snapshot.json>]"
                 .to_owned(),
         ),
     }
@@ -1291,6 +1299,25 @@ fn run_assembly(
     assembly: sentinel_core::assembler::Assembly,
     cycle_budget: u64,
 ) -> Result<(), String> {
+    let mut machine = build_lab_machine(assembly)?;
+    let result = machine
+        .run(cycle_budget)
+        .map_err(|error| error.to_string())?;
+    println!(
+        "status={} steps={} cycles={} pc=0x{:08X} hi=0x{:08X} lo=0x{:08X}",
+        machine_status_label(&result.status),
+        result.steps,
+        result.cycles,
+        machine.pc(),
+        machine.hi(),
+        machine.lo()
+    );
+    let stdout = io::stdout();
+    write_registers(&machine, &mut stdout.lock())?;
+    terminal_execution_result(&result.status)
+}
+
+fn build_lab_machine(assembly: Assembly) -> Result<Machine, String> {
     if assembly.bytes.is_empty() {
         return Err("cannot run an empty S32 image".to_owned());
     }
@@ -1303,7 +1330,7 @@ fn run_assembly(
         Permissions::READ_WRITE,
     )
     .map_err(|error| error.to_string())?;
-    let mut machine = Machine::new(
+    Machine::new(
         ImageManifest {
             entry_point,
             stack_low: LAB_STACK_BASE,
@@ -1317,23 +1344,228 @@ fn run_assembly(
         },
         vec![program, stack],
     )
-    .map_err(|error| error.to_string())?;
-    let result = machine
-        .run(cycle_budget)
-        .map_err(|error| error.to_string())?;
-    let status = match &result.status {
+    .map_err(|error| error.to_string())
+}
+
+fn step_assembly<R: BufRead, W: Write>(
+    assembly: Assembly,
+    cycle_budget: u64,
+    mut input: R,
+    mut output: W,
+) -> Result<(), String> {
+    let mut machine = build_lab_machine(assembly)?;
+    let mut steps = 0_u64;
+    writeln!(
+        output,
+        "S32 stepper commands: Enter/s=step, s N=step N, c=continue, r=registers, h=help, q=quit"
+    )
+    .map_err(|error| format!("cannot write stepper output: {error}"))?;
+    write_stepper_state(&machine, steps, cycle_budget, &mut output)?;
+
+    let mut command = String::new();
+    while machine.status() == &MachineStatus::Running {
+        write!(output, "s32> ")
+            .and_then(|()| output.flush())
+            .map_err(|error| format!("cannot write stepper prompt: {error}"))?;
+        command.clear();
+        let read = input
+            .read_line(&mut command)
+            .map_err(|error| format!("cannot read stepper command: {error}"))?;
+        if read == 0 {
+            writeln!(output, "stepper-exit reason=end_of_input")
+                .map_err(|error| format!("cannot write stepper output: {error}"))?;
+            return Ok(());
+        }
+        let trimmed = command.trim();
+        match trimmed {
+            "" | "s" => execute_visible_steps(
+                &mut machine,
+                &mut steps,
+                1,
+                cycle_budget,
+                &mut output,
+            )?,
+            "c" => {
+                while machine.status() == &MachineStatus::Running {
+                    execute_visible_steps(
+                        &mut machine,
+                        &mut steps,
+                        1,
+                        cycle_budget,
+                        &mut output,
+                    )?;
+                }
+            }
+            "r" => write_registers(&machine, &mut output)?,
+            "h" | "help" => writeln!(
+                output,
+                "Enter or s executes one instruction; s N executes N; c continues; r prints registers; q quits"
+            )
+            .map_err(|error| format!("cannot write stepper output: {error}"))?,
+            "q" | "quit" => {
+                writeln!(
+                    output,
+                    "stepper-exit reason=operator steps={steps} cycles={} pc=0x{:08X}",
+                    machine.cycles(),
+                    machine.pc()
+                )
+                .map_err(|error| format!("cannot write stepper output: {error}"))?;
+                return Ok(());
+            }
+            _ => {
+                let Some(count) = trimmed.strip_prefix("s ") else {
+                    writeln!(output, "unknown command; enter h for help")
+                        .map_err(|error| format!("cannot write stepper output: {error}"))?;
+                    continue;
+                };
+                let Ok(count) = count.trim().parse::<u64>() else {
+                    writeln!(output, "step count must be a positive integer")
+                        .map_err(|error| format!("cannot write stepper output: {error}"))?;
+                    continue;
+                };
+                if count == 0 {
+                    writeln!(output, "step count must be a positive integer")
+                        .map_err(|error| format!("cannot write stepper output: {error}"))?;
+                    continue;
+                }
+                execute_visible_steps(
+                    &mut machine,
+                    &mut steps,
+                    count,
+                    cycle_budget,
+                    &mut output,
+                )?;
+            }
+        }
+    }
+
+    writeln!(
+        output,
+        "stepper-complete status={} steps={steps} cycles={} pc=0x{:08X}",
+        machine_status_label(machine.status()),
+        machine.cycles(),
+        machine.pc()
+    )
+    .map_err(|error| format!("cannot write stepper output: {error}"))?;
+    write_registers(&machine, &mut output)?;
+    terminal_execution_result(machine.status())
+}
+
+fn execute_visible_steps<W: Write>(
+    machine: &mut Machine,
+    steps: &mut u64,
+    count: u64,
+    cycle_budget: u64,
+    output: &mut W,
+) -> Result<(), String> {
+    for _ in 0..count {
+        if machine.status() != &MachineStatus::Running {
+            break;
+        }
+        let before = snapshot_registers(machine);
+        let before_hi = machine.hi();
+        let before_lo = machine.lo();
+        let first_write = machine.memory_writes().len();
+        let result = machine
+            .step(cycle_budget)
+            .map_err(|error| error.to_string())?;
+        *steps = steps.saturating_add(1);
+        let changes = format_register_changes(machine, &before, before_hi, before_lo);
+        let instruction = result
+            .instruction
+            .map_or_else(|| "unavailable".to_owned(), |value| format!("{value:?}"));
+        let writes = format_memory_writes(
+            machine
+                .memory_writes()
+                .get(first_write..)
+                .unwrap_or_default(),
+        );
+        writeln!(
+            output,
+            "step={} pc=0x{:08X} instruction={instruction} cost={} cycles={} next_pc=0x{:08X} status={} changes={changes} writes={writes}",
+            *steps,
+            result.pc,
+            result.cycles_charged,
+            machine.cycles(),
+            machine.pc(),
+            machine_status_label(&result.status)
+        )
+        .map_err(|error| format!("cannot write stepper output: {error}"))?;
+    }
+    Ok(())
+}
+
+fn snapshot_registers(machine: &Machine) -> [u32; 32] {
+    std::array::from_fn(|index| {
+        Register::new(index as u8).map_or(0, |register| machine.register(register))
+    })
+}
+
+fn format_register_changes(
+    machine: &Machine,
+    before: &[u32; 32],
+    before_hi: u32,
+    before_lo: u32,
+) -> String {
+    let mut changes = before
+        .iter()
+        .enumerate()
+        .filter_map(|(index, value)| {
+            let register = Register::new(index as u8)?;
+            let after = machine.register(register);
+            (*value != after).then(|| format!("R{index:02}=0x{after:08X}"))
+        })
+        .collect::<Vec<_>>();
+    if before_hi != machine.hi() {
+        changes.push(format!("HI=0x{:08X}", machine.hi()));
+    }
+    if before_lo != machine.lo() {
+        changes.push(format!("LO=0x{:08X}", machine.lo()));
+    }
+    format!("[{}]", changes.join(","))
+}
+
+fn format_memory_writes(writes: &[sentinel_core::vm::MemoryWrite]) -> String {
+    let writes = writes
+        .iter()
+        .map(|write| {
+            let bytes = write
+                .bytes
+                .iter()
+                .map(|byte| format!("{byte:02X}"))
+                .collect::<String>();
+            format!("0x{:08X}={bytes}", write.address)
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!("[{writes}]")
+}
+
+fn write_stepper_state<W: Write>(
+    machine: &Machine,
+    steps: u64,
+    cycle_budget: u64,
+    output: &mut W,
+) -> Result<(), String> {
+    writeln!(
+        output,
+        "stepper-state status={} steps={steps} cycles={} pc=0x{:08X} budget={cycle_budget}",
+        machine_status_label(machine.status()),
+        machine.cycles(),
+        machine.pc()
+    )
+    .map_err(|error| format!("cannot write stepper output: {error}"))
+}
+
+fn machine_status_label(status: &MachineStatus) -> String {
+    match status {
         MachineStatus::Running => "running".to_owned(),
         MachineStatus::Halted => "halted".to_owned(),
         MachineStatus::Trapped(trap) => format!("trapped:{trap}"),
-    };
-    println!(
-        "status={status} steps={} cycles={} pc=0x{:08X} hi=0x{:08X} lo=0x{:08X}",
-        result.steps,
-        result.cycles,
-        machine.pc(),
-        machine.hi(),
-        machine.lo()
-    );
+    }
+}
+
+fn write_registers<W: Write>(machine: &Machine, output: &mut W) -> Result<(), String> {
     for row in 0..4 {
         let first = row * 8;
         let registers = (first..first + 8)
@@ -1347,9 +1579,14 @@ fn run_assembly(
             })
             .collect::<Vec<_>>()
             .join(" ");
-        println!("{registers}");
+        writeln!(output, "{registers}")
+            .map_err(|error| format!("cannot write register output: {error}"))?;
     }
-    match result.status {
+    Ok(())
+}
+
+fn terminal_execution_result(status: &MachineStatus) -> Result<(), String> {
+    match status {
         MachineStatus::Halted => Ok(()),
         MachineStatus::Trapped(trap) => Err(format!("S32 execution trapped: {trap}")),
         MachineStatus::Running => Err("S32 execution stopped while still running".to_owned()),
@@ -1386,15 +1623,16 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::io::Cursor;
 
-    use sentinel_core::assembler::assemble_with_symbols;
+    use sentinel_core::assembler::{assemble, assemble_with_symbols};
     use sentinel_scenario::{
         AllocationMode, Runtime, ScalarValue, Severity, compile, compile_hardware,
     };
 
     use super::{
         execute_firmware_tick, execute_rocket_firmware, mission_schema, mmio_symbol,
-        parse_ai_config, parse_cycle_budget, parse_tick_count, parse_word,
+        parse_ai_config, parse_cycle_budget, parse_tick_count, parse_word, step_assembly,
     };
 
     const SCENARIO: &str = include_str!("../../../examples/lab-scenario.yaml");
@@ -1421,6 +1659,28 @@ mod tests {
         assert_eq!(parse_tick_count("3"), Ok(3));
         assert!(parse_tick_count("0").is_err());
         assert!(parse_tick_count("many").is_err());
+    }
+
+    #[test]
+    fn interactive_stepper_steps_inspects_and_continues() {
+        let assembly = assemble(
+            ".entry start\nstart:\nli r1, 3\nloop:\naddiu r1, r1, -1\nbne r1, r0, loop\nhalt\n",
+            0,
+        )
+        .unwrap_or_else(|diagnostics| panic!("{diagnostics:?}"));
+        let input = Cursor::new(b"s 2\nr\nc\n");
+        let mut output = Vec::new();
+
+        step_assembly(assembly, 9, input, &mut output).unwrap_or_else(|error| panic!("{error}"));
+
+        let output = String::from_utf8(output).unwrap_or_else(|error| panic!("{error}"));
+        assert!(output.contains("step=1 pc=0x00000000"));
+        assert!(output.contains("step=2 pc=0x00000004"));
+        assert!(output.contains("changes=[R01=0x00000003]"));
+        assert!(output.contains("writes=[]"));
+        assert!(output.contains("R01=0x00000003"));
+        assert!(output.contains("stepper-complete status=halted steps=9 cycles=9 pc=0x00000014"));
+        assert!(output.contains("R01=0x00000000"));
     }
 
     #[test]
