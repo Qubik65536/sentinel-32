@@ -51,7 +51,7 @@ The OpenAI test backend and hackathon `llama.cpp` backend consume the same local
 
 On 2026-09-19, the rocket-twin and advisory-contract workspace passed
 `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
-and `cargo test --workspace`. Sixty-eight default-feature tests cover all 50 golden decoder/encoder
+and `cargo test --workspace`. Sixty-nine default-feature tests cover all 50 golden decoder/encoder
 and source-assembly vectors; assembler syntax and failures; every interpreter
 operation family; signed and unsigned arithmetic; branch, jump, and link
 behavior; reset and `R0`; sparse mappings, permissions, capabilities, and stack
@@ -82,6 +82,9 @@ wrapping, and post-generation rejection of invalid citations. The feature-
 gated OpenAI parser tests cover structured output and refusal, and both the app
 and AI crate pass clippy/tests with `openai-test` enabled. The rocket AI fixture
 passes through the CLI with exact hashes and two expected advisory findings.
+The strict layered-config test covers default/runtime override behavior and
+unknown-key rejection. A launcher smoke test confirms mode-0600 runtime output,
+automatic SHA-256 recording, and rejection after the model bytes change.
 
 The assembly-controlled nominal rocket integration test starts one persistent
 S32 invocation and verifies loading, stabilization, simulated supervisor

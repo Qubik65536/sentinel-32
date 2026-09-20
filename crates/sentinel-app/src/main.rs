@@ -3,6 +3,7 @@ use std::env;
 use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use sentinel_ai_check::{
@@ -24,6 +25,9 @@ use sentinel_scenario::{
 const LAB_STACK_BASE: u32 = 0x2000_0000;
 const LAB_STACK_SIZE: usize = 64 * 1024;
 const TANK_PRESSURE_STEP: i32 = 10_000;
+const MAX_AI_CONFIG_BYTES: usize = 16 * 1024;
+
+static AI_CONFIG: OnceLock<BTreeMap<String, String>> = OnceLock::new();
 
 struct FirmwareRun {
     steps: u64,
@@ -86,6 +90,12 @@ fn parse_tick_count(value: &str) -> Result<u64, String> {
 
 fn run() -> Result<(), String> {
     let args: Vec<String> = env::args().skip(1).collect();
+    if args
+        .first()
+        .is_some_and(|command| command.starts_with("ai-"))
+    {
+        load_ai_config()?;
+    }
     match args.as_slice() {
         [] => {
             println!("sentinel-app {ISA_ID}");
@@ -374,12 +384,9 @@ fn ai_timeout_ms() -> Result<u64, String> {
 }
 
 fn optional_positive_env(name: &str, default: usize, maximum: usize) -> Result<usize, String> {
-    let Some(value) = env::var_os(name) else {
+    let Some(value) = configured_value(name)? else {
         return Ok(default);
     };
-    let value = value
-        .into_string()
-        .map_err(|_| format!("{name} is not valid UTF-8"))?;
     let parsed = value
         .parse::<usize>()
         .map_err(|_| format!("{name} must be a positive integer"))?;
@@ -391,7 +398,98 @@ fn optional_positive_env(name: &str, default: usize, maximum: usize) -> Result<u
 }
 
 fn required_env(name: &str) -> Result<String, String> {
-    env::var(name).map_err(|_| format!("required environment variable `{name}` is missing"))
+    configured_value(name)?
+        .ok_or_else(|| format!("required AI configuration value `{name}` is missing"))
+}
+
+fn configured_value(name: &str) -> Result<Option<String>, String> {
+    match env::var(name) {
+        Ok(value) => Ok(Some(value)),
+        Err(env::VarError::NotPresent) => {
+            Ok(AI_CONFIG.get().and_then(|config| config.get(name)).cloned())
+        }
+        Err(env::VarError::NotUnicode(_)) => Err(format!("{name} is not valid UTF-8")),
+    }
+}
+
+fn load_ai_config() -> Result<(), String> {
+    let default_path =
+        env::var("S32_AI_CONFIG_PATH").unwrap_or_else(|_| "config/ai-llama-default.env".to_owned());
+    let runtime_path = env::var("S32_AI_RUNTIME_CONFIG_PATH")
+        .unwrap_or_else(|_| "config/ai-llama-runtime.env".to_owned());
+    let mut config = BTreeMap::new();
+    load_ai_config_file(
+        &default_path,
+        env::var_os("S32_AI_CONFIG_PATH").is_some(),
+        &mut config,
+    )?;
+    load_ai_config_file(
+        &runtime_path,
+        env::var_os("S32_AI_RUNTIME_CONFIG_PATH").is_some(),
+        &mut config,
+    )?;
+    AI_CONFIG
+        .set(config)
+        .map_err(|_| "AI configuration was loaded more than once".to_owned())
+}
+
+fn load_ai_config_file(
+    path: &str,
+    required: bool,
+    config: &mut BTreeMap<String, String>,
+) -> Result<(), String> {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if !required && error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(format!("cannot read AI config `{path}`: {error}")),
+    };
+    if bytes.len() > MAX_AI_CONFIG_BYTES {
+        return Err(format!(
+            "AI config `{path}` exceeds {MAX_AI_CONFIG_BYTES} bytes"
+        ));
+    }
+    let text = std::str::from_utf8(&bytes)
+        .map_err(|_| format!("AI config `{path}` is not valid UTF-8"))?;
+    parse_ai_config(text, path, config)
+}
+
+fn parse_ai_config(
+    text: &str,
+    path: &str,
+    config: &mut BTreeMap<String, String>,
+) -> Result<(), String> {
+    for (index, raw_line) in text.lines().enumerate() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let (name, value) = line
+            .split_once('=')
+            .ok_or_else(|| format!("invalid AI config line {} in `{path}`", index + 1))?;
+        if !is_ai_config_key(name) || value.is_empty() || value.trim() != value {
+            return Err(format!("invalid AI config line {} in `{path}`", index + 1));
+        }
+        config.insert(name.to_owned(), value.to_owned());
+    }
+    Ok(())
+}
+
+fn is_ai_config_key(name: &str) -> bool {
+    matches!(
+        name,
+        "S32_AI_CHECK_MODE"
+            | "S32_AI_RULES_PATH"
+            | "S32_AI_CHECK_TIMEOUT_MS"
+            | "S32_AI_MAX_SNAPSHOT_BYTES"
+            | "S32_AI_MAX_OUTPUT_BYTES"
+            | "S32_AI_MAX_OUTPUT_TOKENS"
+            | "S32_AI_FIXTURE_RESPONSE_PATH"
+            | "S32_LLAMA_BASE_URL"
+            | "S32_LLAMA_MODEL_ID"
+            | "S32_LLAMA_MODEL_SHA256"
+            | "S32_LLAMA_API_KEY"
+            | "S32_OPENAI_TEST_MODEL"
+    )
 }
 
 fn run_rocket_firmware(
@@ -1161,8 +1259,8 @@ mod tests {
     use sentinel_scenario::{AllocationMode, Runtime, ScalarValue, compile, compile_hardware};
 
     use super::{
-        execute_firmware_tick, execute_rocket_firmware, mmio_symbol, parse_cycle_budget,
-        parse_tick_count, parse_word,
+        execute_firmware_tick, execute_rocket_firmware, mmio_symbol, parse_ai_config,
+        parse_cycle_budget, parse_tick_count, parse_word,
     };
 
     const SCENARIO: &str = include_str!("../../../examples/lab-scenario.yaml");
@@ -1189,6 +1287,35 @@ mod tests {
         assert_eq!(parse_tick_count("3"), Ok(3));
         assert!(parse_tick_count("0").is_err());
         assert!(parse_tick_count("many").is_err());
+    }
+
+    #[test]
+    fn parses_strict_layered_ai_configuration() {
+        let mut config = BTreeMap::new();
+        parse_ai_config(
+            "# defaults\nS32_AI_CHECK_MODE=llama_cpp\nS32_LLAMA_MODEL_ID=first\n",
+            "defaults",
+            &mut config,
+        )
+        .unwrap_or_else(|error| panic!("{error}"));
+        parse_ai_config(
+            "S32_LLAMA_MODEL_ID=qwen2.5-1.5b\nS32_LLAMA_API_KEY=test-key\n",
+            "runtime",
+            &mut config,
+        )
+        .unwrap_or_else(|error| panic!("{error}"));
+        assert_eq!(
+            config.get("S32_LLAMA_MODEL_ID").map(String::as_str),
+            Some("qwen2.5-1.5b")
+        );
+        assert_eq!(
+            config.get("S32_LLAMA_API_KEY").map(String::as_str),
+            Some("test-key")
+        );
+        assert!(
+            parse_ai_config("UNKNOWN=value\n", "bad", &mut config).is_err(),
+            "unknown configuration keys must be rejected"
+        );
     }
 
     #[test]

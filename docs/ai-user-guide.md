@@ -26,17 +26,25 @@ llama-server --version
 sha256sum "$HOME/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
 ```
 
-Compare the model digest with the independently approved value. Then start the
-server from a private shell. The supplied secret must remain an environment
-value; do not put it in a tracked file or command history.
+Compare the model digest with the expected model when an independently approved
+value is available. The repository includes `config/ai-llama-default.env` and
+the local checkout has a mode-0600, gitignored
+`config/ai-llama-runtime.env` containing the supplied server credential. Start
+the server from the repository root:
 
 ```sh
-export S32_LLAMA_MODEL_PATH="$HOME/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
-export S32_LLAMA_MODEL_ID=qwen2.5-1.5b
-export S32_LLAMA_MODEL_SHA256=<approved-64-character-sha256>
-read -rsp 'llama.cpp API key: ' S32_LLAMA_API_KEY; echo
-export S32_LLAMA_API_KEY
 ./scripts/start-llama-server.sh
+```
+
+For a fresh checkout, create the ignored runtime file without placing the key
+in shell history:
+
+```sh
+umask 077
+read -rsp 'llama.cpp API key: ' S32_LLAMA_API_KEY; echo
+printf 'S32_LLAMA_API_KEY=%s\n' "$S32_LLAMA_API_KEY" \
+  >config/ai-llama-runtime.env
+unset S32_LLAMA_API_KEY
 ```
 
 The wrapper verifies the GGUF hash before launch and starts the equivalent of:
@@ -50,23 +58,17 @@ llama-server \
 ```
 
 It supplies the API key through llama.cpp's `LLAMA_API_KEY` environment
-variable so the value does not appear in the process command line. Startup
-prints the model identity and digest, never the key.
+variable so the value does not appear in the process command line. On first
+start, it computes the GGUF SHA-256 and writes it beside the key in the local
+runtime file. Later starts reject a different model digest. Startup prints the
+model identity and digest, never the key.
 
 ## Run the rocket advisory sample
 
-On the client, use the deployment server's reachable address and the same
-approved model identity, digest, and API key:
+On the same host, the CLI automatically loads both configuration files, so the
+default health and sample commands are:
 
 ```sh
-export S32_AI_CHECK_MODE=llama_cpp
-export S32_AI_RULES_PATH=examples/ai/rocket-written-rules.json
-export S32_LLAMA_BASE_URL=http://<deployment-server-ip>:8080
-export S32_LLAMA_MODEL_ID=qwen2.5-1.5b
-export S32_LLAMA_MODEL_SHA256=<approved-64-character-sha256>
-read -rsp 'llama.cpp API key: ' S32_LLAMA_API_KEY; echo
-export S32_LLAMA_API_KEY
-
 cargo run -p sentinel-app -- ai-health deployment
 cargo run -p sentinel-app -- \
   ai-check deployment examples/ai/rocket-pressure-snapshot.json
@@ -98,19 +100,16 @@ rocket runner's output.
 
 ## Run on QNX
 
-The upload helper transfers the release binary, rocket scenario, assembly
-controller, and AI sample files to `/data/home/qnxuser/sentinel-32`. From a QNX
-shell, configure the same values and run:
+The upload helper transfers the release binary, non-secret default config,
+rocket scenario, assembly controller, and AI sample files to
+`/data/home/qnxuser/sentinel-32`. Securely provision the generated runtime file
+at `/data/home/qnxuser/sentinel-32/config/ai-llama-runtime.env` with mode 0600;
+it is deliberately excluded from the upload artifact. From a QNX shell,
+override only the server address and run:
 
 ```sh
 cd /data/home/qnxuser/sentinel-32
-export S32_AI_CHECK_MODE=llama_cpp
-export S32_AI_RULES_PATH=/data/home/qnxuser/sentinel-32/examples/ai/rocket-written-rules.json
 export S32_LLAMA_BASE_URL=http://<deployment-server-ip>:8080
-export S32_LLAMA_MODEL_ID=qwen2.5-1.5b
-export S32_LLAMA_MODEL_SHA256=<approved-64-character-sha256>
-read -s S32_LLAMA_API_KEY
-export S32_LLAMA_API_KEY
 
 ./release/sentinel-app ai-health deployment
 ./release/sentinel-app ai-check deployment \
@@ -120,9 +119,8 @@ export S32_LLAMA_API_KEY
   /data/home/qnxuser/sentinel-32/examples/rocket-controller.asm 10000
 ```
 
-The QNX shell's `read` implementation may not support a prompt option; the
-command above reads the key silently. Run the AI check and deterministic rocket
-run as separate operations. Stopping `llama-server`, using a wrong key, or
+Run the AI check and deterministic rocket run as separate operations. Stopping
+`llama-server`, using a wrong key, or
 blocking port 8080 must make `ai-health`/`ai-check` fail while `rocket-run`
 continues to reach its deterministic result.
 
@@ -163,7 +161,8 @@ result.
 
 ## Cleanup and records
 
-Stop `llama-server` with `Ctrl-C`, then clear both shells:
+Stop `llama-server` with `Ctrl-C`, then clear any temporary environment
+overrides:
 
 ```sh
 unset S32_LLAMA_API_KEY OPENAI_API_KEY

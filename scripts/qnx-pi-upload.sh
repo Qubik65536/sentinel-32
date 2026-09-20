@@ -22,11 +22,14 @@ fi
 
 mkdir -p \
   "$STAGING_TREE/release" \
+  "$STAGING_TREE/config" \
   "$STAGING_TREE/examples" \
   "$STAGING_TREE/examples/ai" \
   "$STAGING_TREE/artifacts"
 
 cp "$APP" "$STAGING_TREE/release/sentinel-app"
+cp "$PROJECT_ROOT/config/ai-llama-default.env" \
+  "$STAGING_TREE/config/ai-llama-default.env"
 cp "$PROJECT_ROOT/examples/countdown.asm" "$STAGING_TREE/examples/countdown.asm"
 cp "$PROJECT_ROOT/examples/valve-controller.asm" \
   "$STAGING_TREE/examples/valve-controller.asm"

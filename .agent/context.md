@@ -33,6 +33,10 @@ rule, finding, provenance, and response-validation contract plus a standard-
 library authenticated `llama.cpp` client and feature-gated OpenAI test client. The two crates
 have no production dependency between them, and an integration test proves
 that an advisory finding cannot alter output decisions.
+The app automatically loads `config/ai-llama-default.env`, then the gitignored
+mode-0600 `config/ai-llama-runtime.env`, with process environment taking
+precedence. The server launcher computes and records the first GGUF hash and
+rejects a later mismatch without logging the stored credential.
 
 Canonical S32 source presentation uses lowercase MIPS-style mnemonics,
 directives, and registers with spaced operands. Markdown source examples use

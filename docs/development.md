@@ -136,6 +136,8 @@ The same lane was rerun after adding the authenticated standard-library
 including the networking code. The final link again failed with exit status
 129 after repeated license-lock timeouts. This confirms compilation only; it
 does not establish a passing QNX build or target execution of the client.
+The layered default/runtime configuration loader also compiled for the QNX
+target and reached the same licensed final-link failure.
 
 ## Raspberry Pi 5 deployment directory
 
