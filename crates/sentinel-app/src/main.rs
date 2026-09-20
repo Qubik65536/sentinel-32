@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -18,8 +18,8 @@ use sentinel_core::vm::{
 };
 use sentinel_core::{ISA_ID, Register, decode};
 use sentinel_scenario::{
-    AllocationKind, AllocationMode, CompiledBundle, Runtime, ScalarValue, TickInput, TickResult,
-    compile, compile_hardware,
+    AllocationKind, AllocationMode, CompiledBundle, Runtime, ScalarValue, Severity, TickInput,
+    TickResult, compile, compile_hardware,
 };
 
 const LAB_STACK_BASE: u32 = 0x2000_0000;
@@ -60,6 +60,13 @@ struct RocketTick {
     frame_last_pc: u32,
     frame_steps: u64,
     frame_cycles: u64,
+    issues: Vec<RocketIssue>,
+}
+
+struct RocketIssue {
+    rule: String,
+    severity: Severity,
+    message: String,
 }
 
 fn parse_word(value: &str) -> Result<u32, String> {
@@ -540,7 +547,28 @@ fn run_rocket_firmware(
             format_values(&tick.firmware_requests),
             format_values(&tick.applied_requests)
         );
+        for issue in &tick.issues {
+            let label = if issue.severity == Severity::Advisory {
+                "NOTICE"
+            } else {
+                "ISSUE"
+            };
+            println!(
+                "{label} tick={} phase={}->{} rule={} severity={} containment={} asm_first_pc=0x{:08X} asm_last_pc=0x{:08X} message={}",
+                tick.result.tick,
+                tick.result.phase_before,
+                tick.result.phase_after,
+                issue.rule,
+                severity_name(issue.severity),
+                containment_name(issue.severity),
+                tick.frame_first_pc,
+                tick.frame_last_pc,
+                serde_json::to_string(&issue.message)
+                    .map_err(|error| format!("cannot encode issue message: {error}"))?
+            );
+        }
     }
+    print_rocket_issue_summary(&run.ticks);
     println!(
         "operation=complete firmware_status=halted firmware_steps={} firmware_cycles={} scenario_ticks={} final_phase={} final_requests={}",
         run.steps,
@@ -622,6 +650,17 @@ fn execute_rocket_firmware(
                 ..TickInput::default()
             })
             .map_err(|error| error.to_string())?;
+        let issues = result
+            .active_rules
+            .iter()
+            .filter_map(|id| {
+                bundle.rules.get(id).map(|rule| RocketIssue {
+                    rule: id.clone(),
+                    severity: rule.severity,
+                    message: rule.message.clone(),
+                })
+            })
+            .collect();
         update_machine_devices(&mut machine, &bundle, &runtime.state().values)?;
         ticks.push(RocketTick {
             result,
@@ -633,6 +672,7 @@ fn execute_rocket_firmware(
             frame_last_pc: step.pc,
             frame_steps,
             frame_cycles,
+            issues,
         });
         frame_actions.clear();
         frame_first_pc = None;
@@ -659,6 +699,55 @@ fn execute_rocket_firmware(
         final_phase: runtime.state().phase.clone(),
         final_requests: actuator_requests(&machine, &bundle)?,
     })
+}
+
+fn severity_name(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Advisory => "advisory",
+        Severity::Inhibit => "inhibit",
+        Severity::Hold => "hold",
+        Severity::Abort => "abort",
+    }
+}
+
+fn containment_name(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Advisory => "observe",
+        Severity::Inhibit => "inhibit_output",
+        Severity::Hold => "hold_progression",
+        Severity::Abort => "latch_abort",
+    }
+}
+
+fn print_rocket_issue_summary(ticks: &[RocketTick]) {
+    let mut issue_rules = BTreeSet::new();
+    let mut notice_rules = BTreeSet::new();
+    let mut issue_events = 0_usize;
+    let mut notice_events = 0_usize;
+    let mut hold_ticks = 0_usize;
+    let mut abort_ticks = 0_usize;
+    for tick in ticks {
+        for issue in &tick.issues {
+            if issue.severity == Severity::Advisory {
+                notice_events = notice_events.saturating_add(1);
+                notice_rules.insert(issue.rule.clone());
+            } else {
+                issue_events = issue_events.saturating_add(1);
+                issue_rules.insert(issue.rule.clone());
+            }
+        }
+        hold_ticks = hold_ticks.saturating_add(usize::from(tick.result.hold));
+        abort_ticks = abort_ticks.saturating_add(usize::from(tick.result.abort_latched));
+    }
+    println!(
+        "ISSUE-SUMMARY issue_events={} notice_events={} hold_ticks={} abort_ticks={} issue_rules={} notice_rules={}",
+        issue_events,
+        notice_events,
+        hold_ticks,
+        abort_ticks,
+        format_ids(&issue_rules.into_iter().collect::<Vec<_>>()),
+        format_ids(&notice_rules.into_iter().collect::<Vec<_>>())
+    );
 }
 
 fn rocket_supervisor_transition(
@@ -1278,7 +1367,9 @@ mod tests {
     use std::collections::BTreeMap;
 
     use sentinel_core::assembler::assemble_with_symbols;
-    use sentinel_scenario::{AllocationMode, Runtime, ScalarValue, compile, compile_hardware};
+    use sentinel_scenario::{
+        AllocationMode, Runtime, ScalarValue, Severity, compile, compile_hardware,
+    };
 
     use super::{
         execute_firmware_tick, execute_rocket_firmware, mmio_symbol, parse_ai_config,
@@ -1448,6 +1539,11 @@ mod tests {
                 .iter()
                 .all(|tick| tick.frame_first_pc % 4 == 0 && tick.frame_last_pc % 4 == 0)
         );
+        assert!(run.ticks.iter().any(|tick| {
+            tick.issues.iter().any(|issue| {
+                issue.rule == "valve_feedback_mismatch" && issue.severity == Severity::Hold
+            })
+        }));
         assert!(
             run.ticks
                 .iter()

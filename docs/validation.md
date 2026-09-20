@@ -95,6 +95,8 @@ regression evidence, not WCET.
 Each of the 19 command frames records a nonzero assembly instruction and
 virtual-cycle count plus aligned first/last PCs, allowing an operator to
 correlate firmware execution with triggered rules and hold/abort state.
+Human-readable output separates advisory `NOTICE` events from `ISSUE` events
+that inhibit, hold, or abort, and emits an aggregate `ISSUE-SUMMARY`.
 
 The host `run examples/countdown.asm 9` case halts after nine steps and cycles
 with `PC=0x00000014` and `R1=0`. Budget 8 is rejected before `HALT` with exit

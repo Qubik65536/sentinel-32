@@ -250,6 +250,8 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
   completed assembly command frame with its first/last PCs, instruction and
   virtual cycle counts, scenario phase transition, active rules/faults, hold
   and abort state, supervisor event, firmware requests, and applied requests.
+  It emits prominent `ISSUE` records for inhibit/hold/abort rules, distinct
+  advisory `NOTICE` records, and an aggregate issue summary.
   Versioned NDJSON, register deltas, replay binding, and nonblocking transport
   remain.
 

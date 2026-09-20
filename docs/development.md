@@ -370,6 +370,10 @@ command frame. Nonempty `active_rules`, `hold=true`, or `abort_latched=true`
 identify a deterministic scenario issue and its containment response. These
 virtual-cycle counts are deterministic accounting, not measured execution time
 or WCET.
+The runner prints a separate uppercase `ISSUE` line for each inhibit, hold, or
+abort rule and a `NOTICE` line for advisory-only rules. `ISSUE-SUMMARY` reports
+their counts and distinct rule IDs at the end of the run, so operators do not
+need to scan the full actuator record.
 
 The run must begin with `rocket-firmware scenario=rocket_launch_default`, the
 same bundle hash, `start=operator_once`, and `cycle_budget=5000`. Its final line

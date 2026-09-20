@@ -94,6 +94,8 @@ Current requirements give AI one advisory function: compare a bounded current-st
   last assembly PCs, instruction count, virtual-cycle count, scenario
   transition, active deterministic rules, hold/abort state, requested outputs,
   and applied outputs.
+  Separate uppercase `ISSUE` lines identify inhibit/hold/abort rules, `NOTICE`
+  lines retain advisory-only rules, and `ISSUE-SUMMARY` aggregates both.
 - `docs/safety-model.md`: claims, invariant families, containment, evidence.
 - `docs/threat-model.md`: assets, untrusted boundaries, abuse cases, controls.
 - `docs/validation.md`: validation layers and current results.
