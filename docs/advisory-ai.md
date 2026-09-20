@@ -70,6 +70,10 @@ failures remain distinct typed errors.
 gate, or QNX code. `sentinel-safety` has no production dependency on
 `sentinel-ai-check`. Integration tests validate advisory findings before and
 after an output decision and demonstrate that the deterministic decision is
-unchanged. Future OpenAI and local `llama.cpp` adapters must use these exact
-types and validators; adapter availability or output can only affect checker
-status and operator-facing findings.
+unchanged. The OpenAI development adapter and authenticated `llama.cpp`
+deployment adapter use these exact types and validators. The latter performs
+bounded blocking HTTP calls to `/health`, `/props`, and
+`/v1/chat/completions`; the former is compile-time optional and uses
+`/v1/responses` with strict structured output. Adapter availability or output
+can only affect checker status and operator-facing findings. See
+`docs/ai-user-guide.md` for operation.

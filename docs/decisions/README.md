@@ -14,4 +14,6 @@ These decisions establish the bootstrap baseline. “Accepted” means the proje
 | [DEC-008](DEC-008-codex-workflow.md) | Codex with repository instructions and verification |
 | [DEC-009](DEC-009-responses-api.md) | Superseded OpenAI production backend |
 | [DEC-010](DEC-010-host-relay.md) | Superseded OpenAI host relay |
-| [DEC-011](DEC-011-advisory-ai-checker.md) | Advisory rule checker with OpenAI tests and local `llama.cpp` deployment |
+| [DEC-011](DEC-011-advisory-ai-checker.md) | Advisory rule checker with OpenAI tests and self-hosted `llama.cpp` deployment |
+| [DEC-012](DEC-012-single-invocation-control.md) | Persistent assembly-controlled operation |
+| [DEC-013](DEC-013-networked-llama-server.md) | Authenticated networked `llama.cpp` deployment server |

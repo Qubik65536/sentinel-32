@@ -16,8 +16,8 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 
 - **Category / status:** requirements / complete (2026-09-19)
 - **Dependencies:** BOOT-001
-- **Description:** Remove AI firmware generation and repair from current requirements. Retain only an advisory comparison of bounded current-state snapshots with versioned written rules, using OpenAI for tests and local `llama.cpp` for the hackathon deployment.
-- **Acceptance:** Project scope, architecture, configuration, safety model, threat model, validation method, demo, decisions, context, and plan agree on the narrowed role; AI has no approval, evidence, policy, activation, or output authority; OpenAI is test-only; the deployment backend is local `llama.cpp` with no remote fallback; setup-guide work is planned.
+- **Description:** Remove AI firmware generation and repair from current requirements. Retain only an advisory comparison of bounded current-state snapshots with versioned written rules, using OpenAI for tests and authenticated deployment-server `llama.cpp` for the hackathon deployment.
+- **Acceptance:** Project scope, architecture, configuration, safety model, threat model, validation method, demo, decisions, context, and plan agree on the narrowed role; AI has no approval, evidence, policy, activation, or output authority; OpenAI is test-only; the deployment backend is authenticated `llama.cpp` with no provider fallback; setup-guide work is planned.
 - **Evidence:** `docs/project.md`, `docs/architecture.md`, `docs/configuration.md`, `docs/safety-model.md`, `docs/threat-model.md`, `docs/validation.md`, `docs/demo.md`, and `docs/decisions/DEC-011-advisory-ai-checker.md`.
 
 ### BUILD-001 — Prove QNX 8.0 AArch64 Rust build and execution
@@ -218,24 +218,27 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 
 ### AI-002 — Implement and evaluate the OpenAI test backend
 
-- **Category / status:** AI / planned
+- **Category / status:** AI / blocked
 - **Dependencies:** AI-001
 - **Description:** Add a development-only OpenAI adapter and use it to test the advisory checker contract against versioned fixtures.
 - **Acceptance:** Current official API and structured-output support are verified when implemented; the adapter is excluded or rejected by the hackathon deployment profile; schema-valid findings parse through the same local types as fixtures and `llama.cpp`; nominal, violation, insufficient-data, injection, refusal, incomplete, timeout, oversized, and invalid-response cases are exercised; false positives, expected-rule recall, `unknown` handling, and latency are recorded; test model and prompt-contract versions are pinned in results; `OPENAI_API_KEY` never appears in artifacts, IPC, traces, or UI output; no control or deployment path waits on it.
+- **Progress:** A compile-time `openai-test` adapter uses the current Responses API structured-output shape, `store: false`, bounded reads, redacted configuration, and the common local validator. Deployment rejects it. Parser tests cover valid output, refusal, and incomplete output; live evaluation remains blocked until an approved test model and credential are supplied.
 
-### AI-003 — Integrate local `llama.cpp` for the hackathon deployment
+### AI-003 — Integrate deployment-server `llama.cpp`
 
-- **Category / status:** AI / planned
+- **Category / status:** AI / blocked
 - **Dependencies:** AI-001
-- **Description:** Connect the advisory checker to a pinned local GGUF model served by `llama.cpp` for the hackathon runtime.
-- **Acceptance:** The checker client and model server run together on the local companion host; the deployment profile permits only a configured loopback `llama.cpp` endpoint and never falls back to OpenAI or another remote service; startup verifies the expected model hash, records model and `llama.cpp` versions and launch parameters, and proves structured-response compatibility; the backend uses the AI-001 request/response types and rejects stale hashes, invented rule IDs, invalid field citations, malformed output, and oversize output; checker timeout, process crash, and unavailable service produce visible non-authoritative status while deterministic control continues; deployment topology and target dependency status are recorded.
+- **Description:** Connect the advisory checker to a pinned GGUF model served by authenticated `llama.cpp` on the deployment server.
+- **Acceptance:** The checker client connects to the authenticated deployment-server `llama.cpp` endpoint selected by DEC-013 and never falls back to OpenAI or another remote service; startup verifies the expected model hash, records model and `llama.cpp` versions and launch parameters, and proves structured-response compatibility; the backend uses the AI-001 request/response types and rejects stale hashes, invented rule IDs, invalid field citations, malformed output, and oversize output; checker timeout, process crash, and unavailable service produce visible non-authoritative status while deterministic control continues; deployment topology and target dependency status are recorded.
+- **Progress:** The standard-library client implements bounded authenticated `/health`, `/props`, and `/v1/chat/completions` requests with strict JSON schema and local semantic validation. The launcher verifies the GGUF hash and uses the requested Qwen/BLAS/CPU/context/bind settings. CLI, rocket fixtures, upload packaging, and user procedure are implemented. Live server and current QNX execution remain required.
 
 ### AI-004 — Validate advisory checker parity and isolation
 
-- **Category / status:** AI / planned
+- **Category / status:** AI / blocked
 - **Dependencies:** AI-002, AI-003, SAFE-001, TWIN-001
 - **Description:** Evaluate both backends on the same state/rule fixtures and prove that the checker remains outside deterministic safety authority.
-- **Acceptance:** Versioned cases cover nominal state, clear violations for each relevant written-rule family, insufficient information, stale/cross-paired hashes, injection strings, malformed/oversized responses, refusal, timeout, and process loss; parse rate, rule-ID validity, field-citation validity, expected-rule recall, false positives, `unknown` handling, and latency are reported separately for OpenAI tests and local `llama.cpp`; stopping either backend leaves invariant evaluation, output gating, active control, and evidence unchanged; results are labeled advisory and do not enter deployment authority.
+- **Acceptance:** Versioned cases cover nominal state, clear violations for each relevant written-rule family, insufficient information, stale/cross-paired hashes, injection strings, malformed/oversized responses, refusal, timeout, and process loss; parse rate, rule-ID validity, field-citation validity, expected-rule recall, false positives, `unknown` handling, and latency are reported separately for OpenAI tests and deployment-server `llama.cpp`; stopping either backend leaves invariant evaluation, output gating, active control, and evidence unchanged; results are labeled advisory and do not enter deployment authority.
+- **Progress:** Shared contract tests and deterministic rocket fixtures cover local validation and safety-output isolation. Backend comparison metrics and live process-loss evidence await both configured services.
 
 ### UI-001 — Implement text/NDJSON observability
 
@@ -271,8 +274,8 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 
 - **Category / status:** QNX / planned
 - **Dependencies:** QNX-001, SAFE-001, SAFE-005, TWIN-001, AI-001
-- **Description:** Deploy safety/output gate, active/shadow controllers, scenario runtime, verifier/gate, and the bounded companion snapshot publisher at the required isolation boundaries.
-- **Acceptance:** Versioned IPC and process startup/restart behavior work on target; active control has no synchronous AI/UI/verifier dependency; the target can publish only versioned, size-bounded state snapshots to the companion and accepts no control response from the checker; observed scheduling policy/priorities are recorded; killing the checker or UI preserves control; malformed IPC fails closed.
+- **Description:** Deploy safety/output gate, active/shadow controllers, scenario runtime, verifier/gate, and the bounded advisory client at the required isolation boundaries.
+- **Acceptance:** Versioned IPC and process startup/restart behavior work on target; active control has no synchronous AI/UI/verifier dependency; the target sends only versioned, size-bounded state snapshots to the configured advisory backend and accepts no control response from the checker; observed scheduling policy/priorities are recorded; killing the checker or UI preserves control; malformed IPC fails closed.
 
 ### QNX-003 — Implement watchdog and heartbeat supervision
 
@@ -290,17 +293,18 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 
 ### DOC-001 — Write the reproducible setup guide
 
-- **Category / status:** documentation / planned
+- **Category / status:** documentation / blocked
 - **Dependencies:** BUILD-001, BOOT-002, AI-002, AI-003
-- **Description:** Document a fresh-machine path for host development, QNX cross-build/target execution, OpenAI-backed checker tests, and the companion-host `llama.cpp` hackathon deployment.
-- **Acceptance:** The guide lists supported host and target prerequisites; exact install/build/test commands; QNX environment placeholders and evidence requirements; local `llama.cpp` build or install with a pinned version; approved GGUF acquisition without committing weights, license/checksum recording, and SHA-256 verification; loopback server launch and structured-output smoke check; OpenAI test-only credential setup and redaction; configuration examples; service ordering; offline/no-remote-fallback verification; troubleshooting, cleanup, and expected outputs. A second person reproduces the applicable host and local-checker steps, and unavailable QNX steps are labeled honestly.
+- **Description:** Document a fresh-machine path for host development, QNX cross-build/target execution, OpenAI-backed checker tests, and the authenticated deployment-server `llama.cpp` setup.
+- **Acceptance:** The guide lists supported host and target prerequisites; exact install/build/test commands; QNX environment placeholders and evidence requirements; deployment-server `llama.cpp` build or install with a pinned version; approved GGUF acquisition without committing weights, license/checksum recording, and SHA-256 verification; authenticated deployment-server launch and structured-output smoke check; OpenAI test-only credential setup and redaction; configuration examples; service ordering; offline/no-remote-fallback verification; troubleshooting, cleanup, and expected outputs. A second person reproduces the applicable host and model-server steps, and unavailable QNX steps are labeled honestly.
+- **Progress:** `docs/ai-user-guide.md` documents the requested deployment server, secret handling, hash verification, rocket sample, fixture/OpenAI modes, QNX commands, and failure checks. Reproduction by a second operator and live target/server evidence remain outstanding.
 
 ### DOC-002 — Reproducible demo and safety-case summary
 
 - **Category / status:** documentation / planned
 - **Dependencies:** AI-004, UI-003, TEST-001, DOC-001
 - **Description:** Package the three-minute narrative, recovery, evidence, and honest limitations using the setup guide.
-- **Acceptance:** A fresh supported environment can reproduce the build/deploy/demo; safe and unsafe validation, advisory written-rule finding, shadow, activation, corruption, checker loss, and controller-hang cases work; local `llama.cpp` deployment and OpenAI test evidence are clearly distinguished; exact tested versions and hashes are recorded; safety-case summary maps claims to mechanisms/tests and discloses gaps.
+- **Acceptance:** A fresh supported environment can reproduce the build/deploy/demo; safe and unsafe validation, advisory written-rule finding, shadow, activation, corruption, checker loss, and controller-hang cases work; deployment-server `llama.cpp` and OpenAI test evidence are clearly distinguished; exact tested versions and hashes are recorded; safety-case summary maps claims to mechanisms/tests and discloses gaps.
 
 ## Critical path
 
@@ -326,5 +330,5 @@ unimplemented critical-path work is `SAFE-002` or `VM-002`.
 ## Open project questions
 
 - How will this environment transfer to and execute commands on the QNX Raspberry Pi 5, and which target image/version is authoritative?
-- Which GGUF model, quantization, license, and SHA-256 will be pinned after `AI-003` measures compatibility and resource use?
+- What approved SHA-256 and license record apply to the selected `Qwen2.5-1.5B-Instruct-Q4_K_M.gguf` file?
 - Which OpenAI test model will be pinned after current structured-output support is verified during `AI-002`?

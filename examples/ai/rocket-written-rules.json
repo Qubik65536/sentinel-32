@@ -1,0 +1,22 @@
+{
+  "hash": "5476683c5a2b70207371ced3ea95d1d5744a85d3edd74c673420846f46e81f8f",
+  "schema": "sentinel.ai-written-rules/v0",
+  "version": 1,
+  "rules": [
+    {
+      "id": "critical_pressure_advisory",
+      "deterministic_rule_id": "critical_pressure",
+      "text": "Report a possible violation when either normalized propellant pressure is at or above 90000 pressure_milli. This prose is advisory and does not define or replace deterministic policy.",
+      "required_fields": [
+        "telemetry.fuel_pressure",
+        "telemetry.oxidizer_pressure"
+      ]
+    },
+    {
+      "id": "range_clear_advisory",
+      "deterministic_rule_id": "launch_interlock_missing",
+      "text": "Report a possible violation when the range-clear input is false. This prose is advisory and does not authorize launch or replace deterministic policy.",
+      "required_fields": ["telemetry.range_clear"]
+    }
+  ]
+}

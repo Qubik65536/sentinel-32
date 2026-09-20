@@ -3,7 +3,14 @@ use std::env;
 use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
+use std::time::Duration;
 
+use sentinel_ai_check::{
+    AdvisoryProvider, CheckRequest, DeploymentProfile, FixtureProvider, Limits, LlamaCppConfig,
+    LlamaCppProvider, parse_and_validate_rule_set, parse_and_validate_snapshot,
+};
+#[cfg(feature = "openai-test")]
+use sentinel_ai_check::{OpenAiTestConfig, OpenAiTestProvider};
 use sentinel_core::assembler::{Assembly, Diagnostic, assemble, assemble_with_symbols};
 use sentinel_core::vm::{
     Capability, ImageManifest, Machine, MachineStatus, MemorySlot, Permissions,
@@ -187,6 +194,10 @@ fn run() -> Result<(), String> {
                 parse_cycle_budget(cycle_budget)?,
             )
         }
+        [command, profile, snapshot] if command == "ai-check" => {
+            run_ai_check(profile, snapshot)
+        }
+        [command, profile] if command == "ai-health" => run_ai_health(profile),
         [command, source, bundle, symbols] if command == "scenario-compile" => {
             let source = read_text(source)?;
             let compilation = compile(&source, AllocationMode::Clean)
@@ -215,10 +226,172 @@ fn run() -> Result<(), String> {
             Ok(())
         }
         _ => Err(
-            "usage: sentinel-app [decode <word> | check <source.asm> | assemble <source.asm> [output.bin] | run <source.asm> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | tank-run <hardware.yaml> <firmware.asm> <cycle-budget> | rocket-run <scenario.yaml> <firmware.asm> <cycle-budget> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks>]"
+            "usage: sentinel-app [decode <word> | check <source.asm> | assemble <source.asm> [output.bin] | run <source.asm> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | tank-run <hardware.yaml> <firmware.asm> <cycle-budget> | rocket-run <scenario.yaml> <firmware.asm> <cycle-budget> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks> | ai-health <deployment|development> | ai-check <deployment|development> <snapshot.json>]"
                 .to_owned(),
         ),
     }
+}
+
+fn run_ai_health(profile: &str) -> Result<(), String> {
+    let profile = parse_deployment_profile(profile)?;
+    let mode = required_env("S32_AI_CHECK_MODE")?;
+    if mode != "llama_cpp" {
+        return Err("ai-health requires S32_AI_CHECK_MODE=llama_cpp".to_owned());
+    }
+    let limits = ai_limits()?;
+    let provider = llama_provider(profile)?;
+    let identity = provider
+        .health(limits.max_response_bytes)
+        .map_err(|error| error.to_string())?;
+    println!(
+        "ai-health status=ready backend=llama_cpp backend_version={} model={} model_sha256={}",
+        identity.build_info, identity.model, identity.model_sha256
+    );
+    Ok(())
+}
+
+fn run_ai_check(profile: &str, snapshot_path: &str) -> Result<(), String> {
+    let profile = parse_deployment_profile(profile)?;
+    let limits = ai_limits()?;
+    let snapshot_bytes = fs::read(snapshot_path)
+        .map_err(|error| format!("cannot read `{snapshot_path}`: {error}"))?;
+    let rules_path = required_env("S32_AI_RULES_PATH")?;
+    let rule_bytes = fs::read(&rules_path)
+        .map_err(|error| format!("cannot read configured AI rules: {error}"))?;
+    let request = CheckRequest {
+        snapshot: parse_and_validate_snapshot(&snapshot_bytes, limits)
+            .map_err(|error| error.to_string())?,
+        rules: parse_and_validate_rule_set(&rule_bytes, limits)
+            .map_err(|error| error.to_string())?,
+    };
+    let mode = required_env("S32_AI_CHECK_MODE")?;
+    if profile == DeploymentProfile::Deployment && mode != "llama_cpp" {
+        return Err("deployment profile requires S32_AI_CHECK_MODE=llama_cpp".to_owned());
+    }
+    let response = match mode.as_str() {
+        "llama_cpp" => llama_provider(profile)?
+            .check(&request, limits)
+            .map_err(|error| error.to_string())?,
+        "fixture" => {
+            let path = required_env("S32_AI_FIXTURE_RESPONSE_PATH")?;
+            let bytes = fs::read(path)
+                .map_err(|error| format!("cannot read configured AI fixture: {error}"))?;
+            FixtureProvider::new(bytes)
+                .check(&request, limits)
+                .map_err(|error| error.to_string())?
+        }
+        "openai_test" => run_openai_check(profile, &request, limits)?,
+        "disabled" => return Err("advisory checker is disabled".to_owned()),
+        _ => return Err("invalid S32_AI_CHECK_MODE".to_owned()),
+    };
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&response)
+            .map_err(|error| format!("cannot encode advisory response: {error}"))?
+    );
+    Ok(())
+}
+
+fn parse_deployment_profile(value: &str) -> Result<DeploymentProfile, String> {
+    match value {
+        "deployment" => Ok(DeploymentProfile::Deployment),
+        "development" => Ok(DeploymentProfile::Development),
+        _ => Err("AI profile must be `deployment` or `development`".to_owned()),
+    }
+}
+
+fn llama_provider(profile: DeploymentProfile) -> Result<LlamaCppProvider, String> {
+    let base_url = required_env("S32_LLAMA_BASE_URL")?;
+    if profile == DeploymentProfile::Deployment && base_url.starts_with("https://") {
+        return Err("deployment llama.cpp endpoint must use configured HTTP transport".to_owned());
+    }
+    LlamaCppProvider::new(LlamaCppConfig {
+        base_url,
+        model: required_env("S32_LLAMA_MODEL_ID")?,
+        model_sha256: required_env("S32_LLAMA_MODEL_SHA256")?,
+        api_key: required_env("S32_LLAMA_API_KEY")?,
+        timeout: Duration::from_millis(ai_timeout_ms()?),
+        max_output_tokens: optional_positive_env("S32_AI_MAX_OUTPUT_TOKENS", 2_048, 8_192)? as u32,
+    })
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(feature = "openai-test")]
+fn run_openai_check(
+    profile: DeploymentProfile,
+    request: &CheckRequest,
+    limits: Limits,
+) -> Result<sentinel_ai_check::CheckResponse, String> {
+    if profile != DeploymentProfile::Development {
+        return Err("openai_test is forbidden in the deployment profile".to_owned());
+    }
+    OpenAiTestProvider::new(OpenAiTestConfig {
+        model: required_env("S32_OPENAI_TEST_MODEL")?,
+        api_key: required_env("OPENAI_API_KEY")?,
+        timeout: Duration::from_millis(ai_timeout_ms()?),
+        max_output_tokens: optional_positive_env("S32_AI_MAX_OUTPUT_TOKENS", 2_048, 8_192)? as u32,
+    })
+    .map_err(|error| error.to_string())?
+    .check(request, limits)
+    .map_err(|error| error.to_string())
+}
+
+#[cfg(not(feature = "openai-test"))]
+fn run_openai_check(
+    profile: DeploymentProfile,
+    _request: &CheckRequest,
+    _limits: Limits,
+) -> Result<sentinel_ai_check::CheckResponse, String> {
+    if profile != DeploymentProfile::Development {
+        return Err("openai_test is forbidden in the deployment profile".to_owned());
+    }
+    Err("openai_test requires rebuilding sentinel-app with `--features openai-test`".to_owned())
+}
+
+fn ai_limits() -> Result<Limits, String> {
+    Ok(Limits {
+        max_snapshot_bytes: optional_positive_env(
+            "S32_AI_MAX_SNAPSHOT_BYTES",
+            Limits::default().max_snapshot_bytes,
+            Limits::default().max_snapshot_bytes,
+        )?,
+        max_response_bytes: optional_positive_env(
+            "S32_AI_MAX_OUTPUT_BYTES",
+            Limits::default().max_response_bytes,
+            Limits::default().max_response_bytes,
+        )?,
+        ..Limits::default()
+    })
+}
+
+fn ai_timeout_ms() -> Result<u64, String> {
+    u64::try_from(optional_positive_env(
+        "S32_AI_CHECK_TIMEOUT_MS",
+        30_000,
+        300_000,
+    )?)
+    .map_err(|_| "S32_AI_CHECK_TIMEOUT_MS is too large".to_owned())
+}
+
+fn optional_positive_env(name: &str, default: usize, maximum: usize) -> Result<usize, String> {
+    let Some(value) = env::var_os(name) else {
+        return Ok(default);
+    };
+    let value = value
+        .into_string()
+        .map_err(|_| format!("{name} is not valid UTF-8"))?;
+    let parsed = value
+        .parse::<usize>()
+        .map_err(|_| format!("{name} must be a positive integer"))?;
+    if parsed == 0 || parsed > maximum {
+        Err(format!("{name} must be between 1 and {maximum}"))
+    } else {
+        Ok(parsed)
+    }
+}
+
+fn required_env(name: &str) -> Result<String, String> {
+    env::var(name).map_err(|_| format!("required environment variable `{name}` is missing"))
 }
 
 fn run_rocket_firmware(

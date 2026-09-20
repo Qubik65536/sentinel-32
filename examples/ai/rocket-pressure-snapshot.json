@@ -1,0 +1,17 @@
+{
+  "hash": "041b00b31c069a92b300ef06cf9e86c41a7f2db4a3d34be256bfd49886a53b6c",
+  "schema": "sentinel.ai-snapshot/v0",
+  "version": 1,
+  "scenario_id": "rocket_launch_default",
+  "scenario_bundle_hash": "72975636c2b7c0db7931bc09defcd3ce27adc3ab98f76fa4d908128f94c25388",
+  "observation": {
+    "tick": 15,
+    "unix_time_ms": null
+  },
+  "fields": {
+    "telemetry.fuel_pressure": { "signed": 95000 },
+    "telemetry.oxidizer_pressure": { "signed": 65000 },
+    "telemetry.range_clear": { "bool": false }
+  },
+  "missing_fields": []
+}

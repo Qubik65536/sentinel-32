@@ -23,6 +23,7 @@ fi
 mkdir -p \
   "$STAGING_TREE/release" \
   "$STAGING_TREE/examples" \
+  "$STAGING_TREE/examples/ai" \
   "$STAGING_TREE/artifacts"
 
 cp "$APP" "$STAGING_TREE/release/sentinel-app"
@@ -35,6 +36,12 @@ cp "$PROJECT_ROOT/examples/lab-scenario.yaml" \
   "$STAGING_TREE/examples/lab-scenario.yaml"
 cp "$PROJECT_ROOT/examples/rocket-launch-default.yaml" \
   "$STAGING_TREE/examples/rocket-launch-default.yaml"
+cp "$PROJECT_ROOT/examples/ai/rocket-pressure-snapshot.json" \
+  "$STAGING_TREE/examples/ai/rocket-pressure-snapshot.json"
+cp "$PROJECT_ROOT/examples/ai/rocket-written-rules.json" \
+  "$STAGING_TREE/examples/ai/rocket-written-rules.json"
+cp "$PROJECT_ROOT/examples/ai/rocket-fixture-response.json" \
+  "$STAGING_TREE/examples/ai/rocket-fixture-response.json"
 cp "$PROJECT_ROOT/Cargo.lock" "$STAGING_TREE/artifacts/Cargo.lock"
 
 (

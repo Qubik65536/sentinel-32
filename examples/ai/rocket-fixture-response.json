@@ -1,0 +1,26 @@
+{
+  "schema": "sentinel.ai-findings/v0",
+  "snapshot_hash": "041b00b31c069a92b300ef06cf9e86c41a7f2db4a3d34be256bfd49886a53b6c",
+  "rule_set_hash": "5476683c5a2b70207371ced3ea95d1d5744a85d3edd74c673420846f46e81f8f",
+  "provenance": {
+    "backend": "fixture",
+    "backend_version": "v0",
+    "model": "deterministic-test-fixture",
+    "model_sha256": null,
+    "prompt_contract": "sentinel.ai-rule-check/v0"
+  },
+  "findings": [
+    {
+      "rule_id": "critical_pressure_advisory",
+      "status": "possible_violation",
+      "cited_fields": ["telemetry.fuel_pressure"],
+      "rationale": "The supplied fuel-pressure value is at or above the written advisory threshold."
+    },
+    {
+      "rule_id": "range_clear_advisory",
+      "status": "possible_violation",
+      "cited_fields": ["telemetry.range_clear"],
+      "rationale": "The supplied range-clear value is false."
+    }
+  ]
+}

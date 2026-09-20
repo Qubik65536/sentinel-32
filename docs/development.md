@@ -131,6 +131,12 @@ This is an unavailable license check, not a Rust compilation failure and not a
 passing QNX build. No new target artifact or target-execution evidence was
 recorded.
 
+The same lane was rerun after adding the authenticated standard-library
+`llama.cpp` client and AI CLI. The QNX compiler compiled the target objects,
+including the networking code. The final link again failed with exit status
+129 after repeated license-lock timeouts. This confirms compilation only; it
+does not establish a passing QNX build or target execution of the client.
+
 ## Raspberry Pi 5 deployment directory
 
 The documented QNX target deployment root is

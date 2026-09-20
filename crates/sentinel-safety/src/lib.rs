@@ -748,7 +748,9 @@ mod tests {
             rule_set_hash: check.rules.hash.clone(),
             provenance: FindingProvenance {
                 backend: "fixture".to_owned(),
+                backend_version: None,
                 model: "untrusted-fixture".to_owned(),
+                model_sha256: None,
                 prompt_contract: PROMPT_CONTRACT.to_owned(),
             },
             findings: vec![Finding {

@@ -1,6 +1,6 @@
 # Configuration contract
 
-Configuration handling is scheduled for implementation with the relevant runtime tasks. This document fixes the intended boundary without claiming a general configuration parser. The current `sentinel-app run` lab harness accepts its required positive virtual-cycle budget as a positional command-line argument; it does not yet read `S32_VIRTUAL_CYCLE_BUDGET` from the environment or a configuration file. The scenario commands likewise use explicit source, output, and positive tick-count arguments. The provider-neutral advisory contract currently uses explicit typed `Limits` with conservative defaults; provider configuration is not implemented under `AI-001`. These library APIs consume bytes or typed values, so configuration precedence cannot silently alter compiled semantics.
+Configuration handling is implemented for the advisory checker CLI and remains planned for the broader runtime. `sentinel-app ai-health` and `ai-check` read the bounded variables below; scenario and VM commands continue to use explicit arguments. Provider configuration cannot alter compiled scenario semantics.
 
 Precedence will be command-line argument, environment variable, versioned configuration file, then documented default. Safety-relevant ambiguity, invalid values, unknown enum variants, and numeric overflow must fail closed. Scenario-specific channel definitions, pressure bands, timeouts, and safe states belong in the compiled scenario and cannot be overridden by process environment.
 
@@ -15,11 +15,15 @@ does not depend on the login directory.
 | `S32_AI_CHECK_MODE` | `llama_cpp`, `openai_test`, `fixture`, or `disabled` | `disabled` by default; hackathon profile must select `llama_cpp`; deployed config must reject `openai_test` |
 | `S32_AI_RULES_PATH` | Versioned written rule-set input | Required when checking is enabled; content is bounded and its hash is recorded with every finding |
 | `S32_AI_CHECK_TIMEOUT_MS` | Advisory check deadline | Positive bounded integer; timeout produces checker-unavailable status and never delays control |
-| `S32_AI_MAX_SNAPSHOT_BYTES` | Serialized state-snapshot ceiling | Positive bounded integer; oversize snapshots are rejected before provider access |
-| `S32_AI_MAX_OUTPUT_BYTES` | Structured finding response ceiling | Positive bounded integer; oversize responses are rejected |
-| `S32_LLAMA_BASE_URL` | Local `llama.cpp` server endpoint | Loopback HTTP only in the hackathon profile; no remote endpoint fallback |
+| `S32_AI_MAX_SNAPSHOT_BYTES` | Serialized state-snapshot ceiling | Positive integer no greater than 65536; oversize snapshots are rejected before provider access |
+| `S32_AI_MAX_OUTPUT_BYTES` | Structured finding response ceiling | Positive integer no greater than 65536; oversize responses are rejected |
+| `S32_LLAMA_BASE_URL` | Authenticated deployment-server `llama.cpp` endpoint | Required `http://` URL; use the server DNS name or IP, never its `0.0.0.0` bind address; no remote fallback |
 | `S32_LLAMA_MODEL_ID` | Operator-readable local model identity | Required in `llama_cpp` mode and recorded with findings |
 | `S32_LLAMA_MODEL_SHA256` | Expected GGUF file identity | Required in `llama_cpp` mode; mismatch prevents checker startup |
+| `S32_LLAMA_API_KEY` | Shared `llama.cpp` credential | Required in `llama_cpp` mode; never logged or included in errors |
+| `S32_LLAMA_MODEL_PATH` | Deployment-server GGUF path | Launcher default is `~/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf` |
+| `S32_AI_MAX_OUTPUT_TOKENS` | Provider generation limit | Positive integer, default 2048 and maximum 8192 |
+| `S32_AI_FIXTURE_RESPONSE_PATH` | Deterministic response fixture | Required only in `fixture` mode |
 | `OPENAI_API_KEY` | OpenAI test credential | No default; test adapter only; never logged, committed, or sent over Sentinel IPC |
 | `S32_OPENAI_TEST_MODEL` | Pinned checker test model | Required only in `openai_test` mode and recorded in test results |
 | `S32_CONTROL_PERIOD_US` | Controller period | Positive integer; target value requires QNX measurement |
@@ -34,4 +38,4 @@ does not depend on the login directory.
 | `S32_SCENARIO_SOURCE_PATH` | Authoring source input | Compiler/Studio only; never loaded as active runtime policy |
 | `S32_SCENARIO_BUNDLE_PATH` | Immutable compiled bundle | Hash and schema version must verify before use |
 
-Never commit `.env` files, API keys, or downloaded model weights. Each enabled adapter must validate its structured-response capability at startup. Every finding records the backend, model identity, prompt-contract version, written-rule version/hash, and snapshot identity without recording authorization headers or unnecessary prompt content. The setup guide will define model acquisition, hash verification, `llama.cpp` launch, OpenAI test configuration, and smoke checks under `DOC-001`.
+Never commit `.env` files, API keys, or downloaded model weights. Every finding records the backend, server build, model identity/hash, prompt-contract version, written-rule hash, and snapshot identity without authorization headers or unnecessary prompt content. See `docs/ai-user-guide.md` for setup and checks.

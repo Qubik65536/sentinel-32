@@ -1,7 +1,6 @@
 # Repository context
 
-Last updated: 2026-09-19 during the `SCEN-003`/`TWIN-001`/`SAFE-001`/`AI-001`
-batch.
+Last updated: 2026-09-19 during the `AI-002`/`AI-003` provider integration.
 
 ## Current implementation
 
@@ -30,7 +29,8 @@ hold, abort, and supervised new attempts. `sentinel-safety` implements typed
 accepted/overridden/rejected output decisions, deterministic safe-state
 precedence, authority-loss containment, and armed replacement denial.
 `sentinel-ai-check` implements the bounded and hash-bound snapshot, written
-rule, finding, provenance, and response-validation contract. The two crates
+rule, finding, provenance, and response-validation contract plus a standard-
+library authenticated `llama.cpp` client and feature-gated OpenAI test client. The two crates
 have no production dependency between them, and an integration test proves
 that an advisory finding cannot alter output decisions.
 
@@ -40,7 +40,7 @@ the `asm` fence, and standalone source files use the `.asm` extension so editors
 can select assembly highlighting. The assembler remains case-insensitive for
 source compatibility.
 
-Current requirements give AI one advisory function: compare a bounded current-state snapshot against versioned written safety rules and emit structured, rule-linked findings. OpenAI is test-only. The hackathon deployment runs the checker client and a pinned local GGUF model served by `llama.cpp` on a companion host, with a loopback-only model endpoint and no remote fallback. AI does not generate firmware or participate in deterministic validation, evidence, activation, safety policy, or output control. This scope is recorded by `SCOPE-001` and `docs/decisions/DEC-011-advisory-ai-checker.md`.
+Current requirements give AI one advisory function: compare a bounded current-state snapshot against versioned written safety rules and emit structured, rule-linked findings. OpenAI is test-only. The deployment client connects to a pinned Qwen2.5 1.5B GGUF served by authenticated `llama.cpp` on a restricted deployment-server network, with no remote fallback. AI does not generate firmware or participate in deterministic validation, evidence, activation, safety policy, or output control. This scope and topology are recorded by `SCOPE-001`, DEC-011, and DEC-013.
 
 ## Navigation
 
@@ -53,12 +53,13 @@ Current requirements give AI one advisory function: compare a bounded current-st
 - `docs/development.md`: host/QNX workflow and `BUILD-001` audit/blocker.
 - `docs/configuration.md`: intended configuration for core services and the advisory checker backends.
 - `docs/advisory-ai.md`: exact provider-neutral snapshot, written-rule, finding, hash, limit, and authority contract.
+- `docs/ai-user-guide.md`: deployment-server, QNX client, rocket sample, OpenAI test, and failure-isolation procedure.
 - `docs/s32-isa.md`: accepted ISA v0 contract; implemented incrementally under `ISA-002` and `VM-001`.
 - `docs/scenario-schema.md`: accepted schema v0 contract and the concrete forms implemented by `SCEN-002`.
 - `crates/sentinel-core`: portable S32 ISA, assembler, VM, memory, traps, cycles, and tests.
 - `crates/sentinel-scenario`: strict parser, compiler, canonical artifacts, MMIO symbols, and deterministic runtime.
 - `crates/sentinel-safety`: deterministic safe-state resolution and output request decisions.
-- `crates/sentinel-ai-check`: provider-neutral bounded advisory checker types and validators.
+- `crates/sentinel-ai-check`: provider-neutral advisory contract, validators, `llama.cpp` client, and feature-gated OpenAI test client.
 - `crates/sentinel-app`: host/QNX CLI for VM and scenario workflows.
 - `examples/countdown.asm`: source-level assembler smoke example.
 - `examples/lab-scenario.yaml`: hardware-only tank-pressure and two-valve MMIO inventory with no controller actions.
@@ -96,12 +97,14 @@ testing remains a separate operator SSH session.
 
 ## Next work
 
+Run the configured `llama-server`, capture its version and approved GGUF hash,
+then execute the AI health/check and failure-isolation procedure on QNX.
 Review the SCEN-002 runtime clarification and SAFE-001 trusted safety behavior.
 Then resolve the QNX license lock, link the current workspace, run its VM and
 scenario checks on the Raspberry Pi 5, and capture the evidence in
 `docs/development.md`. The next unimplemented critical-path work is `SAFE-002`
-or `VM-002`; AI provider work begins with `AI-002` or `AI-003`.
+or `VM-002`; live provider evaluation remains under `AI-002` through `AI-004`.
 
 ## Working tree note
 
-The tree began from commit `c30b2c0`; preserve unrelated work.
+The AI provider batch began from commit `d561adb`; preserve unrelated work.

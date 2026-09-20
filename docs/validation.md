@@ -51,7 +51,7 @@ The OpenAI test backend and hackathon `llama.cpp` backend consume the same local
 
 On 2026-09-19, the rocket-twin and advisory-contract workspace passed
 `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
-and `cargo test --workspace`. Sixty-five tests cover all 50 golden decoder/encoder
+and `cargo test --workspace`. Sixty-eight default-feature tests cover all 50 golden decoder/encoder
 and source-assembly vectors; assembler syntax and failures; every interpreter
 operation family; signed and unsigned arithmetic; branch, jump, and link
 behavior; reset and `R0`; sparse mappings, permissions, capabilities, and stack
@@ -77,6 +77,11 @@ authority-lost outputs; abort-over-hazard precedence; armed replacement denial;
 and advisory-result isolation. Advisory contract fixtures cover nominal,
 possible violation, insufficient data, stale/cross-paired hashes, invented rule
 and field citations, malformed and oversized output, and injection-shaped text.
+Provider tests cover endpoint validation, credential redaction, provenance
+wrapping, and post-generation rejection of invalid citations. The feature-
+gated OpenAI parser tests cover structured output and refusal, and both the app
+and AI crate pass clippy/tests with `openai-test` enabled. The rocket AI fixture
+passes through the CLI with exact hashes and two expected advisory findings.
 
 The assembly-controlled nominal rocket integration test starts one persistent
 S32 invocation and verifies loading, stabilization, simulated supervisor
@@ -102,3 +107,6 @@ source. The expanded five-crate workspace compiled its QNX-target libraries on
 2026-09-19, then the final app link again failed after the QNX license lock
 timed out. QNX linking and Raspberry Pi 5 execution remain to be captured; the
 exact operator procedure is in `docs/development.md`.
+The later AI-provider build also compiled the QNX target objects and failed at
+the same licensed final-link step. No live `llama-server`, OpenAI request, or
+QNX advisory-network result is claimed in this record.

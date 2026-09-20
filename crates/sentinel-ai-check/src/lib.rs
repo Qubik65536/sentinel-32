@@ -6,6 +6,18 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+#[cfg(feature = "openai-test")]
+mod openai;
+mod provider;
+
+#[cfg(feature = "openai-test")]
+pub use openai::{OpenAiTestConfig, OpenAiTestProvider};
+
+pub use provider::{
+    AdvisoryProvider, DeploymentProfile, FixtureProvider, LlamaCppConfig, LlamaCppProvider,
+    ProviderError,
+};
+
 pub const SNAPSHOT_SCHEMA: &str = "sentinel.ai-snapshot/v0";
 pub const RULE_SET_SCHEMA: &str = "sentinel.ai-written-rules/v0";
 pub const RESPONSE_SCHEMA: &str = "sentinel.ai-findings/v0";
@@ -149,7 +161,11 @@ pub struct Finding {
 #[serde(deny_unknown_fields)]
 pub struct FindingProvenance {
     pub backend: String,
+    #[serde(default)]
+    pub backend_version: Option<String>,
     pub model: String,
+    #[serde(default)]
+    pub model_sha256: Option<String>,
     pub prompt_contract: String,
 }
 
@@ -502,7 +518,9 @@ mod tests {
             rule_set_hash: request.rules.hash.clone(),
             provenance: FindingProvenance {
                 backend: "fixture".to_owned(),
+                backend_version: None,
                 model: "deterministic-fixture".to_owned(),
+                model_sha256: None,
                 prompt_contract: PROMPT_CONTRACT.to_owned(),
             },
             findings: vec![Finding {

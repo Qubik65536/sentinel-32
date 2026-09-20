@@ -2,7 +2,7 @@
 
 Sentinel-32 is a software-only safety laboratory for embedded firmware. It will run a deterministic, MIPS-inspired S32 virtual CPU against declarative mission-critical simulations, beginning with a rocket ground-launch sequencer. Deterministic validation and runtime supervision control what may run and which requests may affect the simulated system.
 
-AI has one narrow, advisory role: compare a bounded snapshot of current state with a versioned set of written safety rules and report possible violations for an operator. OpenAI is used only to test that checker; the hackathon deployment uses a local `llama.cpp` server. AI findings never approve firmware, replace deterministic invariants, or control outputs.
+AI has one narrow, advisory role: compare a bounded snapshot of current state with a versioned set of written safety rules and report possible violations for an operator. OpenAI is used only to test that checker; the hackathon deployment uses an authenticated `llama.cpp` deployment server. AI findings never approve firmware, replace deterministic invariants, or control outputs.
 
 This is a safety-oriented prototype and educational demonstration. It is not certified control software, bounded exploration is not formal proof, observed timing is not WCET, and all launch values are normalized simulation values.
 
@@ -129,3 +129,7 @@ Start with [project scope](docs/project.md), [architecture](docs/architecture.md
 [advisory AI contract](docs/advisory-ai.md). Contributors and coding agents
 must follow [AGENTS.md](AGENTS.md) and select work from
 [.agent/plan.md](.agent/plan.md).
+
+The [advisory AI user guide](docs/ai-user-guide.md) gives the deployment-server
+launch, authenticated `llama.cpp` configuration, rocket snapshot example,
+QNX commands, OpenAI development check, and failure-isolation procedure.

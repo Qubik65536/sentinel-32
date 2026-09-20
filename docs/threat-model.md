@@ -14,7 +14,7 @@ AI safety findings, human-authored assembly, written AI rules, scenario source a
 
 ## Trust boundaries
 
-The test-only OpenAI adapter is network-capable and outside both the real-time path and safety authority. The hackathon `llama.cpp` service is local, nonessential, and also outside the trusted computing base. Neither backend exists in the assembler, validation, deployment, safety-monitor, or output-control path. The dashboard and Scenario Studio can request compilation and display results but cannot activate firmware or directly write plant outputs. The compiler/verifier boundary accepts bounded data and produces immutable identified artifacts. QNX IPC messages are versioned, length checked, state checked, and do not carry pointers or platform handles.
+The test-only OpenAI adapter is network-capable and outside both the real-time path and safety authority. The deployment `llama.cpp` service is authenticated, nonessential, network separated, and also outside the trusted computing base. Its plaintext HTTP port is restricted to the trusted lab network. Neither backend exists in the assembler, validation, deployment, safety-monitor, or output-control path. The dashboard and Scenario Studio can request compilation and display results but cannot activate firmware or directly write plant outputs. The compiler/verifier boundary accepts bounded data and produces immutable identified artifacts. QNX IPC messages are versioned, length checked, state checked, and do not carry pointers or platform handles.
 
 ## Required controls
 
@@ -27,7 +27,8 @@ The test-only OpenAI adapter is network-capable and outside both the real-time p
 - The output gate checks every request against current policy and cannot be bypassed by firmware MMIO.
 - Watchdogs, cycle budgets, memory permissions, and process isolation limit hangs and invalid access.
 - Test credentials remain only in the OpenAI test process environment, are redacted from errors, and never enter IPC, fixtures, traces, evidence, panic text, or UI events.
-- The local model path and server endpoint are validated; the server binds to loopback in the hackathon profile and cannot fall back to a remote provider.
+- The `llama.cpp` credential remains in process environments, is redacted from diagnostics, and is not placed in the launcher command line or repository.
+- The deployment model path, SHA-256, and server endpoint are validated; the server requires an API key on the restricted lab network and cannot fall back to another provider.
 - Active control continues when the checker, validation, UI, DNS, TLS, or networking fails.
 
 ## Key abuse cases
