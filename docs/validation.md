@@ -51,12 +51,13 @@ The OpenAI test backend and hackathon `llama.cpp` backend consume the same local
 
 On 2026-09-19, the hardware-manifest workspace passed `cargo fmt --check`,
 `cargo clippy --workspace --all-targets -- -D warnings`, and
-`cargo test --workspace`. Forty-four tests cover all 50 golden decoder/encoder
+`cargo test --workspace`. Forty-five tests cover all 50 golden decoder/encoder
 and source-assembly vectors; assembler syntax and failures; every interpreter
 operation family; signed and unsigned arithmetic; branch, jump, and link
 behavior; reset and `R0`; sparse mappings, permissions, capabilities, and stack
 bounds; stable trap classes and precedence; atomic fault behavior; full-cost
-cycle-budget refusal; and end-to-end countdown assembly and execution. The
+cycle-budget refusal; externally driven telemetry/feedback updates that cannot
+alter actuator or protected slots; and end-to-end countdown execution. The
 scenario tests cover strict source rejection, typed schema/semantic/coverage
 errors, stable canonical hashes, presentation separation, clean and stable MMIO
 allocation, reproducible symbols, every dynamic operation and fault family,
@@ -70,9 +71,11 @@ code 2. A prior clean QNX SDP 8.0 Build 14 workspace release cross-build for
 `aarch64-unknown-nto-qnx800` produced an AArch64 QNX PIE with SHA-256
 `50a2c8546e1f256f85d7429b7f1b3e68409559fbc13cdcab6b88cb6824146aae`.
 The current tank hardware manifest compiles to bundle hash
-`23de1aff43b7a942198f2cf5f5b04414a15e5b90a9e64145caa02c0d9677b7f8`.
-Its host run fills to 50000, holds that pressure for ten simulated seconds,
-unloads to zero, and finishes with both valves closed. The current QNX link was
+`b96e97412c6762b20b78a04f7de2b3450d668f2a8f030022479a471a7683681c`.
+One host invocation executes 203 instructions over 257 virtual cycles: it fills
+to 50000, counts a ten-second hold in firmware, unloads to zero, closes both
+valves, and halts. The simulator updates read-only pressure without restarting
+the machine. The current QNX link was
 attempted but the local QNX
 license lock timed out, so the earlier binary hash is not evidence for this
 source. QNX cross-build and Raspberry Pi 5 execution remain to be captured; the

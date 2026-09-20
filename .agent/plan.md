@@ -110,8 +110,9 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
   hashing, clean and stable MMIO allocation, reproducible symbols, all dynamic
   and fault families, deterministic ticks, injection rejection, and an
   end-to-end VM harness where a hardware-only YAML inventory allocates MMIO and
-  firmware owns a pressure-controlled fill, ten-second hold, unload, and stop
-  sequence across deterministic simulated seconds. The runner records every
+  one persistent firmware invocation owns a pressure-controlled fill,
+  ten-second hold, unload, and stop sequence. The runner changes physical
+  telemetry between request pairs without restarting firmware and records every
   typed actuator write and instrument change. Host validation passes; the latest QNX
   link attempt was blocked by a local QNX license-lock timeout. Formal
   completion waits on `BOOT-002` and human review

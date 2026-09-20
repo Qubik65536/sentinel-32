@@ -74,14 +74,15 @@ cargo run -p sentinel-app -- hardware-check examples/lab-scenario.yaml
 cargo run -p sentinel-app -- hardware-compile \
   examples/lab-scenario.yaml bundle.json symbols.inc
 cargo run -p sentinel-app -- tank-run \
-  examples/lab-scenario.yaml examples/valve-controller.s32 21 100
+  examples/lab-scenario.yaml examples/valve-controller.s32 1000
 ```
 
 The YAML contains hardware existence, value types, and reset values only. The
-firmware obtains pressure, hold-time, inlet, and outlet addresses from the
-compiled inventory. It fills to 50.000 pressure units, holds for ten simulated
-seconds, unloads to zero, and closes both valves. The runner prints each
-second's readings and MMIO writes in execution order. The
+firmware obtains pressure, inlet, and outlet addresses from the compiled
+inventory. One operator start runs a persistent assembly loop that fills to
+50.000 pressure units, counts a ten-second hold in `R8`, unloads to zero, closes
+both valves, and halts. The runner prints each second's readings and MMIO writes
+without restarting the firmware. The
 [development guide](docs/development.md#scen-002-raspberry-pi-5-test) gives the
 equivalent Raspberry Pi 5 checks and expected output.
 

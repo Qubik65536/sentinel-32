@@ -34,13 +34,14 @@ Current requirements give AI one advisory function: compare a bounded current-st
 - `crates/sentinel-scenario`: strict parser, compiler, canonical artifacts, MMIO symbols, and deterministic runtime.
 - `crates/sentinel-app`: host/QNX CLI for VM and scenario workflows.
 - `examples/countdown.s32`: source-level assembler smoke example.
-- `examples/lab-scenario.yaml`: hardware-only tank, pressure, timer, and two-valve MMIO inventory with no controller actions.
+- `examples/lab-scenario.yaml`: hardware-only tank-pressure and two-valve MMIO inventory with no controller actions.
 - `crates/sentinel-scenario/src/test-scenario.yaml`: internal full-schema compiler fixture.
 - `examples/valve-controller.s32`: commented firmware that fills to a pressure target, holds ten simulated seconds, unloads, and closes both valves.
 - `docs/safety-model.md`: claims, invariant families, containment, evidence.
 - `docs/threat-model.md`: assets, untrusted boundaries, abuse cases, controls.
 - `docs/validation.md`: validation layers and current results.
 - `docs/decisions/`: accepted bootstrap architecture decisions and revisit triggers.
+- `docs/decisions/DEC-012-single-invocation-control.md`: operator-started firmware remains active until its bounded operation completes.
 
 ## Verified environment
 

@@ -496,6 +496,22 @@ impl Machine {
             .map(MemorySlot::bytes)
     }
 
+    /// Replaces one complete telemetry or feedback slot from the external
+    /// hardware model. This bypasses firmware permissions but cannot alter
+    /// program, stack, actuator-request, supervisor, or safety memory.
+    pub fn update_device_slot(&mut self, base: u32, bytes: &[u8]) -> bool {
+        let Some(slot) = self.slots.iter_mut().find(|slot| slot.base == base) else {
+            return false;
+        };
+        if !matches!(slot.kind, RegionKind::Telemetry | RegionKind::Feedback)
+            || slot.bytes.len() != bytes.len()
+        {
+            return false;
+        }
+        slot.bytes.copy_from_slice(bytes);
+        true
+    }
+
     pub fn memory_writes(&self) -> &[MemoryWrite] {
         &self.memory_writes
     }
@@ -1025,6 +1041,43 @@ mod tests {
         assert_eq!(machine.lo(), 0);
         assert_eq!(machine.cycles(), 0);
         assert_eq!(machine.status(), &MachineStatus::Running);
+    }
+
+    #[test]
+    fn external_hardware_updates_only_telemetry_and_feedback_slots() {
+        let telemetry = TELEMETRY_START;
+        let request = REQUEST_START;
+        let mut machine = machine_with_slots(
+            &[Instruction::Halt],
+            vec![
+                MemorySlot::new(telemetry, vec![0; 4], Permissions::READ)
+                    .unwrap_or_else(|error| panic!("{error}")),
+                MemorySlot::new(request, vec![0; 4], Permissions::WRITE)
+                    .unwrap_or_else(|error| panic!("{error}")),
+            ],
+            vec![
+                Capability {
+                    base: telemetry,
+                    length: 4,
+                    read: true,
+                    write: false,
+                },
+                Capability {
+                    base: request,
+                    length: 4,
+                    read: false,
+                    write: true,
+                },
+            ],
+        );
+
+        assert!(machine.update_device_slot(telemetry, &42_u32.to_le_bytes()));
+        assert_eq!(
+            machine.slot_bytes(telemetry),
+            Some(42_u32.to_le_bytes().as_slice())
+        );
+        assert!(!machine.update_device_slot(request, &1_u32.to_le_bytes()));
+        assert!(!machine.update_device_slot(telemetry, &[1, 2]));
     }
 
     #[test]

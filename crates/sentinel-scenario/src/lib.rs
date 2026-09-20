@@ -44,8 +44,7 @@ mod tests {
                 ("actuator.outlet_valve", 0x5000_0004),
                 ("feedback.inlet_valve_position", 0x6000_0000),
                 ("feedback.outlet_valve_position", 0x6000_0004),
-                ("telemetry.seconds_since_inlet_closed", 0x4000_0000),
-                ("telemetry.tank_pressure", 0x4000_0004),
+                ("telemetry.tank_pressure", 0x4000_0000),
             ]
         );
         assert!(

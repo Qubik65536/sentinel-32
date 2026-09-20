@@ -21,13 +21,6 @@ telemetry:
     unit: pressure_milli
     range: {min: 0, max: 100000}
     initial: 0
-  seconds_since_inlet_closed:
-    # Whole simulated seconds measured since the inlet was last closed.
-    type: i32
-    unit: count
-    range: {min: 0, max: 1000000}
-    initial: 0
-
 # Write-only request registers. The controller independently commands the
 # inlet and outlet valves.
 actuators:

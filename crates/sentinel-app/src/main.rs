@@ -22,7 +22,14 @@ struct FirmwareRun {
     steps: u64,
     cycles: u64,
     final_requests: BTreeMap<String, ScalarValue>,
+    tank_seconds: Vec<TankSecond>,
+}
+
+struct TankSecond {
+    readings: BTreeMap<String, ScalarValue>,
     actions: Vec<(String, ScalarValue)>,
+    requests: BTreeMap<String, ScalarValue>,
+    next_readings: BTreeMap<String, ScalarValue>,
 }
 
 fn parse_word(value: &str) -> Result<u32, String> {
@@ -151,11 +158,10 @@ fn run() -> Result<(), String> {
             }
             Ok(())
         }
-        [command, scenario, firmware, ticks, cycle_budget] if command == "tank-run" => {
+        [command, scenario, firmware, cycle_budget] if command == "tank-run" => {
             run_scenario_firmware(
                 scenario,
                 firmware,
-                parse_tick_count(ticks)?,
                 parse_cycle_budget(cycle_budget)?,
             )
         }
@@ -187,7 +193,7 @@ fn run() -> Result<(), String> {
             Ok(())
         }
         _ => Err(
-            "usage: sentinel-app [decode <word> | check <source.s32> | assemble <source.s32> [output.bin] | run <source.s32> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | tank-run <hardware.yaml> <firmware.s32> <seconds> <cycle-budget-per-second> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks>]"
+            "usage: sentinel-app [decode <word> | check <source.s32> | assemble <source.s32> [output.bin] | run <source.s32> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | tank-run <hardware.yaml> <firmware.s32> <cycle-budget> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks>]"
                 .to_owned(),
         ),
     }
@@ -240,7 +246,6 @@ fn format_scalar(value: &ScalarValue) -> String {
 fn run_scenario_firmware(
     scenario_path: &str,
     firmware_path: &str,
-    ticks: u64,
     cycle_budget: u64,
 ) -> Result<(), String> {
     let scenario_source = read_text(scenario_path)?;
@@ -259,12 +264,11 @@ fn run_scenario_firmware(
     }
 
     println!(
-        "tank-firmware hardware={} publication={} bundle={} firmware={} requested_seconds={} cycle_budget_per_second={}",
+        "tank-firmware hardware={} publication={} bundle={} firmware={} start=operator_once cycle_budget={}",
         compilation.bundle.scenario_id,
         compilation.bundle.publication,
         compilation.bundle_hash,
         firmware_path,
-        ticks,
         cycle_budget
     );
     for entry in &compilation.bundle.mmio {
@@ -284,23 +288,24 @@ fn run_scenario_firmware(
 
     let bundle = compilation.bundle;
     let runtime = Runtime::new(bundle.clone());
-    let mut hardware_values = runtime.state().values.clone();
-    for run_number in 1..=ticks {
-        let readings = tank_readings(&hardware_values)?;
-        let run = execute_firmware_tick(&assembly, &bundle, &hardware_values, cycle_budget)?;
-        advance_tank_hardware(&mut hardware_values, &run.final_requests)?;
-        let next_readings = tank_readings(&hardware_values)?;
+    let run = execute_firmware_tick(&assembly, &bundle, &runtime.state().values, cycle_budget)?;
+    for (index, second) in run.tank_seconds.iter().enumerate() {
         println!(
-            "second={} firmware_status=halted firmware_steps={} firmware_cycles={} readings={} actions={} final_requests={} next_readings={}",
-            run_number,
-            run.steps,
-            run.cycles,
-            format_values(&readings),
-            format_action_values(&run.actions),
-            format_values(&run.final_requests),
-            format_values(&next_readings)
+            "second={} readings={} actions={} requests={} next_readings={}",
+            index + 1,
+            format_values(&second.readings),
+            format_action_values(&second.actions),
+            format_values(&second.requests),
+            format_values(&second.next_readings)
         );
     }
+    println!(
+        "operation=complete firmware_status=halted firmware_steps={} firmware_cycles={} simulated_seconds={} final_requests={}",
+        run.steps,
+        run.cycles,
+        run.tank_seconds.len(),
+        format_values(&run.final_requests)
+    );
     Ok(())
 }
 
@@ -367,14 +372,20 @@ fn execute_firmware_tick(
         slots,
     )
     .map_err(|error| error.to_string())?;
-    let run = machine
-        .run(cycle_budget)
-        .map_err(|error| error.to_string())?;
-    if run.status != MachineStatus::Halted {
-        return Err(format!("scenario firmware ended with {:?}", run.status));
-    }
-    let mut actions = Vec::new();
-    for write in machine.memory_writes() {
+    let mut hardware_values = hardware_values.clone();
+    let mut steps = 0_u64;
+    let mut write_cursor = 0_usize;
+    let mut second_actions = Vec::new();
+    let mut tank_seconds = Vec::new();
+    while machine.status() == &MachineStatus::Running {
+        machine
+            .step(cycle_budget)
+            .map_err(|error| error.to_string())?;
+        steps = steps.saturating_add(1);
+        let Some(write) = machine.memory_writes().get(write_cursor).cloned() else {
+            continue;
+        };
+        write_cursor = write_cursor.saturating_add(1);
         let Some(entry) = bundle.mmio.iter().find(|entry| {
             entry.kind == AllocationKind::ActuatorRequest && entry.address == write.address
         }) else {
@@ -385,11 +396,43 @@ fn execute_firmware_tick(
             .get(..4)
             .ok_or_else(|| format!("request write `{}` is not 32 bits", entry.qualified_id))?;
         let word = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
-        actions.push((
+        let action = (
             entry.qualified_id.clone(),
             word_to_scalar(word, &entry.scalar_type, bundle)?,
-        ));
+        );
+        second_actions.push(action);
+        if entry.qualified_id == "actuator.outlet_valve" {
+            let readings = tank_readings(&hardware_values)?;
+            let requests = actuator_requests(&machine, bundle)?;
+            advance_tank_hardware(&mut hardware_values, &requests)?;
+            update_machine_devices(&mut machine, bundle, &hardware_values)?;
+            tank_seconds.push(TankSecond {
+                readings,
+                actions: std::mem::take(&mut second_actions),
+                requests,
+                next_readings: tank_readings(&hardware_values)?,
+            });
+        }
     }
+    if machine.status() != &MachineStatus::Halted {
+        return Err(format!("tank firmware ended with {:?}", machine.status()));
+    }
+    if !second_actions.is_empty() {
+        return Err("tank firmware halted with an incomplete valve-command pair".to_owned());
+    }
+    let requests = actuator_requests(&machine, bundle)?;
+    Ok(FirmwareRun {
+        steps,
+        cycles: machine.cycles(),
+        final_requests: requests,
+        tank_seconds,
+    })
+}
+
+fn actuator_requests(
+    machine: &Machine,
+    bundle: &CompiledBundle,
+) -> Result<BTreeMap<String, ScalarValue>, String> {
     let mut requests = BTreeMap::new();
     for entry in &bundle.mmio {
         if entry.kind != AllocationKind::ActuatorRequest {
@@ -405,30 +448,22 @@ fn execute_firmware_tick(
             word_to_scalar(word, &entry.scalar_type, bundle)?,
         );
     }
-    Ok(FirmwareRun {
-        steps: run.steps,
-        cycles: run.cycles,
-        final_requests: requests,
-        actions,
-    })
+    Ok(requests)
 }
 
 fn tank_readings(
     hardware_values: &BTreeMap<String, ScalarValue>,
 ) -> Result<BTreeMap<String, ScalarValue>, String> {
-    [
-        "telemetry.tank_pressure",
-        "telemetry.seconds_since_inlet_closed",
-    ]
-    .into_iter()
-    .map(|reference| {
-        hardware_values
-            .get(reference)
-            .cloned()
-            .map(|value| (reference.to_owned(), value))
-            .ok_or_else(|| format!("tank hardware is missing `{reference}`"))
-    })
-    .collect()
+    ["telemetry.tank_pressure"]
+        .into_iter()
+        .map(|reference| {
+            hardware_values
+                .get(reference)
+                .cloned()
+                .map(|value| (reference.to_owned(), value))
+                .ok_or_else(|| format!("tank hardware is missing `{reference}`"))
+        })
+        .collect()
 }
 
 fn advance_tank_hardware(
@@ -446,16 +481,6 @@ fn advance_tank_hardware(
         Some(_) => return Err("tank pressure is not an i32 value".to_owned()),
         None => return Err("tank hardware is missing `telemetry.tank_pressure`".to_owned()),
     };
-    let inlet_closed_seconds = match hardware_values.get("telemetry.seconds_since_inlet_closed") {
-        Some(ScalarValue::Signed(value)) => *value,
-        Some(_) => return Err("inlet-closed timer is not an i32 value".to_owned()),
-        None => {
-            return Err(
-                "tank hardware is missing `telemetry.seconds_since_inlet_closed`".to_owned(),
-            );
-        }
-    };
-
     let next_pressure = if inlet_open {
         pressure.saturating_add(TANK_PRESSURE_STEP).min(100_000)
     } else if outlet_open {
@@ -463,22 +488,38 @@ fn advance_tank_hardware(
     } else {
         pressure
     };
-    let next_inlet_closed_seconds = if inlet_open {
-        0
-    } else {
-        inlet_closed_seconds.saturating_add(1)
-    };
-
     hardware_values.insert(
         "telemetry.tank_pressure".to_owned(),
         ScalarValue::Signed(next_pressure),
     );
-    hardware_values.insert(
-        "telemetry.seconds_since_inlet_closed".to_owned(),
-        ScalarValue::Signed(next_inlet_closed_seconds),
-    );
     set_valve_hardware(hardware_values, "inlet_valve", inlet_open);
     set_valve_hardware(hardware_values, "outlet_valve", outlet_open);
+    Ok(())
+}
+
+fn update_machine_devices(
+    machine: &mut Machine,
+    bundle: &CompiledBundle,
+    hardware_values: &BTreeMap<String, ScalarValue>,
+) -> Result<(), String> {
+    for entry in &bundle.mmio {
+        if !matches!(
+            entry.kind,
+            AllocationKind::Telemetry | AllocationKind::Feedback
+        ) {
+            continue;
+        }
+        let value = hardware_values
+            .get(&entry.qualified_id)
+            .ok_or_else(|| format!("hardware value `{}` is missing", entry.qualified_id))?;
+        let bytes = scalar_to_word(value, &entry.scalar_type, bundle)?.to_le_bytes();
+        if !machine.update_device_slot(entry.address, &bytes) {
+            return Err(format!(
+                "cannot update device slot `{}`",
+                entry.qualified_id
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -689,8 +730,7 @@ mod tests {
     use sentinel_scenario::{Runtime, ScalarValue, compile_hardware};
 
     use super::{
-        advance_tank_hardware, execute_firmware_tick, mmio_symbol, parse_cycle_budget,
-        parse_tick_count, parse_word,
+        execute_firmware_tick, mmio_symbol, parse_cycle_budget, parse_tick_count, parse_word,
     };
 
     const SCENARIO: &str = include_str!("../../../examples/lab-scenario.yaml");
@@ -729,62 +769,65 @@ mod tests {
         let assembly = assemble_with_symbols(FIRMWARE, 0, &symbols)
             .unwrap_or_else(|diagnostics| panic!("{diagnostics:?}"));
         let runtime = Runtime::new(compilation.bundle.clone());
-        let mut values = runtime.state().values.clone();
-        let mut requests_by_second = Vec::new();
-        for _ in 0..21 {
-            let run = execute_firmware_tick(&assembly, &compilation.bundle, &values, 100)
-                .unwrap_or_else(|error| panic!("{error}"));
-            assert_eq!(run.actions.len(), 2);
-            requests_by_second.push(run.final_requests.clone());
-            advance_tank_hardware(&mut values, &run.final_requests)
-                .unwrap_or_else(|error| panic!("{error}"));
-        }
+        let run = execute_firmware_tick(
+            &assembly,
+            &compilation.bundle,
+            &runtime.state().values,
+            1_000,
+        )
+        .unwrap_or_else(|error| panic!("{error}"));
+        assert_eq!(run.tank_seconds.len(), 21);
+        assert_eq!(
+            run.tank_seconds
+                .iter()
+                .map(|second| second.actions.len())
+                .sum::<usize>(),
+            42
+        );
 
-        for requests in &requests_by_second[0..5] {
+        for second in &run.tank_seconds[0..5] {
             assert_eq!(
-                requests.get("actuator.inlet_valve"),
+                second.requests.get("actuator.inlet_valve"),
                 Some(&ScalarValue::Enum("open".to_owned()))
             );
             assert_eq!(
-                requests.get("actuator.outlet_valve"),
+                second.requests.get("actuator.outlet_valve"),
                 Some(&ScalarValue::Enum("closed".to_owned()))
             );
         }
-        for requests in &requests_by_second[5..15] {
+        for second in &run.tank_seconds[5..15] {
             assert_eq!(
-                requests.get("actuator.inlet_valve"),
+                second.requests.get("actuator.inlet_valve"),
                 Some(&ScalarValue::Enum("closed".to_owned()))
             );
             assert_eq!(
-                requests.get("actuator.outlet_valve"),
+                second.requests.get("actuator.outlet_valve"),
                 Some(&ScalarValue::Enum("closed".to_owned()))
             );
         }
-        for requests in &requests_by_second[15..20] {
+        for second in &run.tank_seconds[15..20] {
             assert_eq!(
-                requests.get("actuator.inlet_valve"),
+                second.requests.get("actuator.inlet_valve"),
                 Some(&ScalarValue::Enum("closed".to_owned()))
             );
             assert_eq!(
-                requests.get("actuator.outlet_valve"),
+                second.requests.get("actuator.outlet_valve"),
                 Some(&ScalarValue::Enum("open".to_owned()))
             );
         }
         assert_eq!(
-            requests_by_second[20].get("actuator.inlet_valve"),
+            run.tank_seconds[20].requests.get("actuator.inlet_valve"),
             Some(&ScalarValue::Enum("closed".to_owned()))
         );
         assert_eq!(
-            requests_by_second[20].get("actuator.outlet_valve"),
+            run.tank_seconds[20].requests.get("actuator.outlet_valve"),
             Some(&ScalarValue::Enum("closed".to_owned()))
         );
         assert_eq!(
-            values.get("telemetry.tank_pressure"),
+            run.tank_seconds[20]
+                .next_readings
+                .get("telemetry.tank_pressure"),
             Some(&ScalarValue::Signed(0))
-        );
-        assert_eq!(
-            values.get("telemetry.seconds_since_inlet_closed"),
-            Some(&ScalarValue::Signed(16))
         );
     }
 }

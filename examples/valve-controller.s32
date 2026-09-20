@@ -1,91 +1,91 @@
-# Tank loading controller.
+# Single-invocation tank controller.
 #
-# The YAML only declares that the tank instruments and two valve request
-# registers exist. This firmware owns the complete operating sequence:
+# An operator starts this program once. The program remains active and loops
+# through the complete operation until the tank has been filled, held, and
+# unloaded. The runner updates physical pressure between valve-command pairs;
+# it never restarts this program or chooses the next controller state.
 #
-#   1. Open the inlet and keep the outlet closed until pressure reaches 50.000.
-#   2. Close both valves and hold that pressure for 10 simulated seconds.
-#   3. Keep the inlet closed and open the outlet until pressure reaches zero.
-#   4. Close both valves.
-#
-# `tank-run` invokes this bounded controller once per simulated second.
-# The simulated tank changes pressure between invocations in response to the
-# requests. The controller reads the new instruments on its next invocation.
+# Complete assembly-owned sequence:
+#   1. Keep inlet OPEN and outlet CLOSED until pressure reaches 50.000.
+#   2. Keep both valves CLOSED for exactly 10 simulated seconds.
+#   3. Keep inlet CLOSED and outlet OPEN until pressure reaches zero.
+#   4. Close both valves and HALT.
 #
 # YAML-generated MMIO symbols:
-#   S32_TELEMETRY_TANK_PRESSURE          current tank pressure, read-only
-#   S32_TELEMETRY_SECONDS_SINCE_INLET_CLOSED  inlet-closed seconds, read-only
-#   S32_ACTUATOR_INLET_VALVE             inlet request, write-only
-#   S32_ACTUATOR_OUTLET_VALVE            outlet request, write-only
+#   S32_TELEMETRY_TANK_PRESSURE  current tank pressure, read-only
+#   S32_ACTUATOR_INLET_VALVE     inlet request, write-only
+#   S32_ACTUATOR_OUTLET_VALVE    outlet request, write-only
 #
-# Valve values are defined by YAML enum order: closed=0 and open=1.
+# Valve values come from YAML enum order: closed=0 and open=1.
 # Pressure uses integer milli-units, so 50000 means 50.000 pressure units.
+# Each completed pair of valve writes represents one simulated second of tank
+# response. The ten-second counter is R8, entirely inside this firmware.
 #
 # Registers:
 #   R1  = current pressure
-#   R2  = seconds already held at target
-#   R3  = constant or comparison input
+#   R3  = pressure target 50000
 #   R4  = comparison result
 #   R5  = inlet request
 #   R6  = outlet request
+#   R8  = remaining hold seconds
 #   R10 = pressure-register address
-#   R11 = hold-seconds-register address
 #   R12 = inlet-request address
 #   R13 = outlet-request address
 
 .entry start
 
 start:
-    # Resolve every hardware address from the YAML-generated symbol table.
+    # Resolve hardware addresses once when the operator starts the program.
     LA   R10, S32_TELEMETRY_TANK_PRESSURE
-    LA   R11, S32_TELEMETRY_SECONDS_SINCE_INLET_CLOSED
     LA   R12, S32_ACTUATOR_INLET_VALVE
     LA   R13, S32_ACTUATOR_OUTLET_VALVE
-
-    # Sample the two read-only instruments for this control cycle.
-    LW   R1, 0(R10)
-    LW   R2, 0(R11)
-
-    # Once ten hold seconds have completed, stay in the unloading part of the
-    # sequence even though pressure falls below the original loading target.
-    SLTI R4, R2, 10
-    BEQ  R4, R0, unload
-
-    # Before the hold completes, load whenever pressure is below 50.000.
     LI   R3, 50000
-    SLT  R4, R1, R3
-    BNE  R4, R0, load
-
-hold:
-    # Target pressure has been reached but ten seconds have not elapsed.
-    # Closing both valves requests that the tank retain its pressure.
-    LI   R5, 0
-    LI   R6, 0
-    B    write_requests
 
 load:
-    # Pressure is below target: request inlet OPEN and outlet CLOSED.
+    # Re-read the live pressure after every simulated second. Continue filling
+    # while pressure is below the firmware-owned 50.000 target.
+    LW   R1, 0(R10)
+    SLT  R4, R1, R3
+    BEQ  R4, R0, begin_hold
+
     LI   R5, 1
     LI   R6, 0
-    B    write_requests
+    SW   R5, 0(R12)
+    SW   R6, 0(R13)
+    B    load
 
-unload:
-    # The ten-second hold is complete. If pressure remains above zero, request
-    # inlet CLOSED and outlet OPEN so the tank unloads.
-    SLTI R4, R1, 1
-    BNE  R4, R0, stopped
-    LI   R5, 0
-    LI   R6, 1
-    B    write_requests
+begin_hold:
+    # The target has been reached. R8 belongs to this still-running program and
+    # counts the ten requested hold seconds; YAML contains no hold instruction.
+    LI   R8, 10
 
-stopped:
-    # The tank has unloaded to zero. Finish with both valves closed.
+hold:
+    # One closed/closed command pair represents one simulated hold second.
     LI   R5, 0
     LI   R6, 0
+    SW   R5, 0(R12)
+    SW   R6, 0(R13)
+    ADDIU R8, R8, -1
+    BNE  R8, R0, hold
 
-write_requests:
-    # Publish both decisions for this simulated second, then end the bounded
-    # controller invocation. The next invocation receives updated instruments.
+unload:
+    # Poll pressure after every outlet-flow second. Continue unloading while
+    # pressure is greater than zero.
+    LW   R1, 0(R10)
+    SLTI R4, R1, 1
+    BNE  R4, R0, stopped
+
+    LI   R5, 0
+    LI   R6, 1
+    SW   R5, 0(R12)
+    SW   R6, 0(R13)
+    B    unload
+
+stopped:
+    # The complete operation is finished. Leave both valves closed, then halt
+    # this one operator-triggered execution.
+    LI   R5, 0
+    LI   R6, 0
     SW   R5, 0(R12)
     SW   R6, 0(R13)
     HALT

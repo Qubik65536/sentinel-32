@@ -242,38 +242,42 @@ echo $?
 echo $?
 ```
 
-Both commands must exit `0` and report six MMIO entries. Then run the
+Both commands must exit `0` and report five MMIO entries. Then run the
 assembly-owned action sequence against those YAML-declared registers:
 
 ```sh
 /data/home/qnxuser/sentinel-32/release/sentinel-app tank-run \
   /data/home/qnxuser/sentinel-32/examples/lab-scenario.yaml \
-  /data/home/qnxuser/sentinel-32/examples/valve-controller.s32 21 100
+  /data/home/qnxuser/sentinel-32/examples/valve-controller.s32 1000
 echo $?
 ```
 
 The MMIO preamble must map inlet and outlet requests to `0x50000000` and
-`0x50000004`, their feedback to `0x60000000` and `0x60000004`, and the two
-telemetry registers to `0x40000000` and `0x40000004`. Verify these stages:
+`0x50000004`, their feedback to `0x60000000` and `0x60000004`, and pressure
+telemetry to `0x40000000`. Verify these stages:
 
 - seconds 1 through 5: inlet open, outlet closed, pressure rises to 50000;
-- seconds 6 through 15: both closed, pressure remains 50000, inlet-closed time reaches 10;
+- seconds 6 through 15: both closed and pressure remains 50000;
 - seconds 16 through 20: inlet closed, outlet open, pressure falls to zero;
 - second 21: both valves closed at zero pressure.
 
-This proves the YAML only supplied hardware existence and encoding while the
-assembly selected every action. The command must exit `0`.
+The final line must report one completed execution with 203 instructions, 257
+virtual cycles, 21 simulated seconds, and both requests closed. This proves the
+operator started firmware once, YAML only supplied hardware existence and
+encoding, and assembly retained control until completion. The command must exit
+`0`.
 
 Also verify fail-closed argument handling:
 
 ```sh
 /data/home/qnxuser/sentinel-32/release/sentinel-app tank-run \
   /data/home/qnxuser/sentinel-32/examples/lab-scenario.yaml \
-  /data/home/qnxuser/sentinel-32/examples/valve-controller.s32 0 100
+  /data/home/qnxuser/sentinel-32/examples/valve-controller.s32 256
 echo $?
 ```
 
-It must report `error: run/tick count must be positive` and exit `2`.
+It must report a cycle-budget-exceeded error and exit `2`; the firmware must not
+be restarted to finish the operation.
 Record the exact output, exit statuses, tested source commit, binary hash, and
 target image identity. Keep the executable and fixtures in the documented
 deployment tree. Generated `hardware-bundle.json` and `hardware-symbols.inc` may be
