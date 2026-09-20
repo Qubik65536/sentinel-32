@@ -415,17 +415,10 @@ fn configured_value(name: &str) -> Result<Option<String>, String> {
 fn load_ai_config() -> Result<(), String> {
     let default_path =
         env::var("S32_AI_CONFIG_PATH").unwrap_or_else(|_| "config/ai-llama-default.env".to_owned());
-    let runtime_path = env::var("S32_AI_RUNTIME_CONFIG_PATH")
-        .unwrap_or_else(|_| "config/ai-llama-runtime.env".to_owned());
     let mut config = BTreeMap::new();
     load_ai_config_file(
         &default_path,
         env::var_os("S32_AI_CONFIG_PATH").is_some(),
-        &mut config,
-    )?;
-    load_ai_config_file(
-        &runtime_path,
-        env::var_os("S32_AI_RUNTIME_CONFIG_PATH").is_some(),
         &mut config,
     )?;
     AI_CONFIG
@@ -469,7 +462,12 @@ fn parse_ai_config(
         if !is_ai_config_key(name) || value.is_empty() || value.trim() != value {
             return Err(format!("invalid AI config line {} in `{path}`", index + 1));
         }
-        config.insert(name.to_owned(), value.to_owned());
+        if config.insert(name.to_owned(), value.to_owned()).is_some() {
+            return Err(format!(
+                "duplicate AI config key `{name}` on line {} in `{path}`",
+                index + 1
+            ));
+        }
     }
     Ok(())
 }
@@ -1290,17 +1288,11 @@ mod tests {
     }
 
     #[test]
-    fn parses_strict_layered_ai_configuration() {
+    fn parses_strict_ai_configuration() {
         let mut config = BTreeMap::new();
         parse_ai_config(
-            "# defaults\nS32_AI_CHECK_MODE=llama_cpp\nS32_LLAMA_MODEL_ID=first\n",
+            "# defaults\nS32_AI_CHECK_MODE=llama_cpp\nS32_LLAMA_MODEL_ID=qwen2.5-1.5b\nS32_LLAMA_API_KEY=test-key\n",
             "defaults",
-            &mut config,
-        )
-        .unwrap_or_else(|error| panic!("{error}"));
-        parse_ai_config(
-            "S32_LLAMA_MODEL_ID=qwen2.5-1.5b\nS32_LLAMA_API_KEY=test-key\n",
-            "runtime",
             &mut config,
         )
         .unwrap_or_else(|error| panic!("{error}"));
@@ -1315,6 +1307,16 @@ mod tests {
         assert!(
             parse_ai_config("UNKNOWN=value\n", "bad", &mut config).is_err(),
             "unknown configuration keys must be rejected"
+        );
+        let mut duplicate = BTreeMap::new();
+        assert!(
+            parse_ai_config(
+                "S32_AI_CHECK_MODE=llama_cpp\nS32_AI_CHECK_MODE=fixture\n",
+                "duplicate",
+                &mut duplicate
+            )
+            .is_err(),
+            "duplicate configuration keys must be rejected"
         );
     }
 

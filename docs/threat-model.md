@@ -14,7 +14,7 @@ AI safety findings, human-authored assembly, written AI rules, scenario source a
 
 ## Trust boundaries
 
-The test-only OpenAI adapter is network-capable and outside both the real-time path and safety authority. The deployment `llama.cpp` service is authenticated, nonessential, network separated, and also outside the trusted computing base. Its plaintext HTTP port is restricted to the trusted lab network. Neither backend exists in the assembler, validation, deployment, safety-monitor, or output-control path. The dashboard and Scenario Studio can request compilation and display results but cannot activate firmware or directly write plant outputs. The compiler/verifier boundary accepts bounded data and produces immutable identified artifacts. QNX IPC messages are versioned, length checked, state checked, and do not carry pointers or platform handles.
+The test-only OpenAI adapter is network-capable and outside both the real-time path and safety authority. The QNX-hosted `llama.cpp` service is authenticated, nonessential, and also outside the trusted computing base. The checker uses loopback; the server's plaintext externally bound port is restricted to the trusted lab network. Neither backend exists in the assembler, validation, deployment, safety-monitor, or output-control path. The dashboard and Scenario Studio can request compilation and display results but cannot activate firmware or directly write plant outputs. The compiler/verifier boundary accepts bounded data and produces immutable identified artifacts. QNX IPC messages are versioned, length checked, state checked, and do not carry pointers or platform handles.
 
 ## Required controls
 

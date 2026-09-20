@@ -4,7 +4,8 @@
 .env
 .env.*
 !.env.example
-/config/ai-llama-runtime.env
+/config/ai-llama-default.env
+!/config/ai-llama-default.env.example
 
 # Editor and operating-system state
 .DS_Store

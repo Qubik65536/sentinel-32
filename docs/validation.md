@@ -82,8 +82,8 @@ wrapping, and post-generation rejection of invalid citations. The feature-
 gated OpenAI parser tests cover structured output and refusal, and both the app
 and AI crate pass clippy/tests with `openai-test` enabled. The rocket AI fixture
 passes through the CLI with exact hashes and two expected advisory findings.
-The strict layered-config test covers default/runtime override behavior and
-unknown-key rejection. A launcher smoke test confirms mode-0600 runtime output,
+The strict config test covers parsing plus unknown/duplicate-key rejection. A
+launcher smoke test confirms a mode-0600 default file,
 automatic SHA-256 recording, and rejection after the model bytes change.
 
 The assembly-controlled nominal rocket integration test starts one persistent

@@ -33,10 +33,11 @@ rule, finding, provenance, and response-validation contract plus a standard-
 library authenticated `llama.cpp` client and feature-gated OpenAI test client. The two crates
 have no production dependency between them, and an integration test proves
 that an advisory finding cannot alter output decisions.
-The app automatically loads `config/ai-llama-default.env`, then the gitignored
-mode-0600 `config/ai-llama-runtime.env`, with process environment taking
-precedence. The server launcher computes and records the first GGUF hash and
-rejects a later mismatch without logging the stored credential.
+The app loads the gitignored mode-0600 `config/ai-llama-default.env`, with
+process environment taking precedence. The single file contains the localhost
+endpoint, absolute QNX paths, credential, and model hash. The server launcher
+computes and records the first GGUF hash there and rejects a later mismatch
+without logging the stored credential. The repository tracks only an example.
 
 Canonical S32 source presentation uses lowercase MIPS-style mnemonics,
 directives, and registers with spaced operands. Markdown source examples use
@@ -44,7 +45,7 @@ the `asm` fence, and standalone source files use the `.asm` extension so editors
 can select assembly highlighting. The assembler remains case-insensitive for
 source compatibility.
 
-Current requirements give AI one advisory function: compare a bounded current-state snapshot against versioned written safety rules and emit structured, rule-linked findings. OpenAI is test-only. The deployment client connects to a pinned Qwen2.5 1.5B GGUF served by authenticated `llama.cpp` on a restricted deployment-server network, with no remote fallback. AI does not generate firmware or participate in deterministic validation, evidence, activation, safety policy, or output control. This scope and topology are recorded by `SCOPE-001`, DEC-011, and DEC-013.
+Current requirements give AI one advisory function: compare a bounded current-state snapshot against versioned written safety rules and emit structured, rule-linked findings. OpenAI is test-only. On QNX, the deployment client connects through localhost to a pinned Qwen2.5 1.5B GGUF served by authenticated `llama.cpp` on the same host, with no remote fallback. AI does not generate firmware or participate in deterministic validation, evidence, activation, safety policy, or output control. This scope and topology are recorded by `SCOPE-001`, DEC-011, and DEC-013.
 
 ## Navigation
 

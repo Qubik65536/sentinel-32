@@ -7,10 +7,9 @@ deployment remain authoritative and continue when the AI service is absent.
 
 ## Deployment layout
 
-Run `llama-server` on the deployment server and `sentinel-app ai-check` on the
-QNX target or a development host. The server listens on all deployment-server
-interfaces at port 8080. A client must use that server's real DNS name or IP;
-`0.0.0.0` is only a bind address and the client rejects it.
+Run `llama-server` and `sentinel-app ai-check` on the QNX deployment host. The
+server listens on all interfaces at port 8080, while the checker connects to
+`127.0.0.1:8080`. `0.0.0.0` is only a bind address and the client rejects it.
 
 The connection is authenticated HTTP and is not encrypted. Keep port 8080 on
 an isolated trusted lab network or carry it through an authenticated VPN or
@@ -27,23 +26,26 @@ sha256sum "$HOME/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
 ```
 
 Compare the model digest with the expected model when an independently approved
-value is available. The repository includes `config/ai-llama-default.env` and
-the local checkout has a mode-0600, gitignored
-`config/ai-llama-runtime.env` containing the supplied server credential. Start
-the server from the repository root:
+value is available. The repository includes
+`config/ai-llama-default.env.example`. The effective configuration is the
+mode-0600, gitignored `config/ai-llama-default.env`, which contains the
+localhost endpoint, absolute QNX sample paths, supplied server credential, and
+model identity. Start the server from the repository root:
 
 ```sh
 ./scripts/start-llama-server.sh
 ```
 
-For a fresh checkout, create the ignored runtime file without placing the key
+For a fresh checkout, create the ignored default file without placing the key
 in shell history:
 
 ```sh
 umask 077
 read -rsp 'llama.cpp API key: ' S32_LLAMA_API_KEY; echo
-printf 'S32_LLAMA_API_KEY=%s\n' "$S32_LLAMA_API_KEY" \
-  >config/ai-llama-runtime.env
+cp config/ai-llama-default.env.example config/ai-llama-default.env
+sed -i "s/S32_LLAMA_API_KEY=replace-locally/S32_LLAMA_API_KEY=$S32_LLAMA_API_KEY/" \
+  config/ai-llama-default.env
+chmod 600 config/ai-llama-default.env
 unset S32_LLAMA_API_KEY
 ```
 
@@ -59,18 +61,19 @@ llama-server \
 
 It supplies the API key through llama.cpp's `LLAMA_API_KEY` environment
 variable so the value does not appear in the process command line. On first
-start, it computes the GGUF SHA-256 and writes it beside the key in the local
-runtime file. Later starts reject a different model digest. Startup prints the
-model identity and digest, never the key.
+start, it computes the GGUF SHA-256 and updates it in the local default file.
+Later starts reject a different model digest. Startup prints the model identity
+and digest, never the key.
 
 ## Run the rocket advisory sample
 
-On the same host, the CLI automatically loads both configuration files, so the
+On the same host, the CLI automatically loads the default configuration, so the
 default health and sample commands are:
 
 ```sh
 cargo run -p sentinel-app -- ai-health deployment
-cargo run -p sentinel-app -- \
+S32_AI_RULES_PATH=examples/ai/rocket-written-rules.json \
+  cargo run -p sentinel-app -- \
   ai-check deployment examples/ai/rocket-pressure-snapshot.json
 ```
 
@@ -100,21 +103,21 @@ rocket runner's output.
 
 ## Run on QNX
 
-The upload helper transfers the release binary, non-secret default config,
+The upload helper transfers the release binary, non-secret default example,
 rocket scenario, assembly controller, and AI sample files to
-`/data/home/qnxuser/sentinel-32`. Securely provision the generated runtime file
-at `/data/home/qnxuser/sentinel-32/config/ai-llama-runtime.env` with mode 0600;
-it is deliberately excluded from the upload artifact. From a QNX shell,
-override only the server address and run:
+`/data/home/qnxuser/sentinel-32`. Securely provision the generated default file
+at `/data/home/qnxuser/sentinel-32/config/ai-llama-default.env` with mode 0600;
+it is deliberately excluded from the upload artifact. From the release
+directory on QNX, use the absolute configuration path:
 
 ```sh
-cd /data/home/qnxuser/sentinel-32
-export S32_LLAMA_BASE_URL=http://<deployment-server-ip>:8080
+cd /data/home/qnxuser/sentinel-32/release
+export S32_AI_CONFIG_PATH=/data/home/qnxuser/sentinel-32/config/ai-llama-default.env
 
-./release/sentinel-app ai-health deployment
-./release/sentinel-app ai-check deployment \
+./sentinel-app ai-health deployment
+./sentinel-app ai-check deployment \
   /data/home/qnxuser/sentinel-32/examples/ai/rocket-pressure-snapshot.json
-./release/sentinel-app rocket-run \
+./sentinel-app rocket-run \
   /data/home/qnxuser/sentinel-32/examples/rocket-launch-default.yaml \
   /data/home/qnxuser/sentinel-32/examples/rocket-controller.asm 10000
 ```
@@ -146,8 +149,8 @@ activation, control outputs, deterministic policy, or safety evidence.
 ## Failure interpretation
 
 - `401` or `403`: client and server API keys differ.
-- connection or DNS error: verify the deployment-server address and firewall;
-  do not use `0.0.0.0` as the client host.
+- connection error: verify that local `llama-server` is listening on port 8080;
+  use `127.0.0.1`, never `0.0.0.0`, as the client host.
 - model identity mismatch from `/props`: the configured alias does not match
   the running server.
 - contract error: the model returned structurally or semantically invalid
