@@ -49,9 +49,9 @@ The OpenAI test backend and hackathon `llama.cpp` backend consume the same local
 
 ## Current validation record
 
-On 2026-09-19, the hardware-manifest workspace passed `cargo fmt --check`,
-`cargo clippy --workspace --all-targets -- -D warnings`, and
-`cargo test --workspace`. Forty-five tests cover all 50 golden decoder/encoder
+On 2026-09-19, the rocket-twin and advisory-contract workspace passed
+`cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`,
+and `cargo test --workspace`. Sixty-five tests cover all 50 golden decoder/encoder
 and source-assembly vectors; assembler syntax and failures; every interpreter
 operation family; signed and unsigned arithmetic; branch, jump, and link
 behavior; reset and `R0`; sparse mappings, permissions, capabilities, and stack
@@ -64,6 +64,26 @@ allocation, reproducible symbols, every dynamic operation and fault family,
 one-shot faults, priority, deterministic phase progression, and firmware access
 to hardware-only YAML-allocated MMIO. The integration test observes the two
 assembly-issued actuator requests in order and verifies the final request.
+
+The default rocket scenario compiles to 23 MMIO slots and bundle hash
+`72975636c2b7c0db7931bc09defcd3ce27adc3ab98f76fa4d908128f94c25388`.
+Its tests cover loading through completion, exact pressure edges at 49,999,
+50,000, 70,000, 70,001, and 90,000 normalized milli-units, drift,
+overpressure, stale pressure, stuck feedback, bus loss, continuity/readiness/
+clearance loss, countdown timing, asynchronous hold and abort, persistent abort,
+supervised new-attempt reset, and repeatable events/final state. Safety tests
+cover accepted, overridden, rejected, invalid, inhibited, abort-latched, and
+authority-lost outputs; abort-over-hazard precedence; armed replacement denial;
+and advisory-result isolation. Advisory contract fixtures cover nominal,
+possible violation, insufficient data, stale/cross-paired hashes, invented rule
+and field citations, malformed and oversized output, and injection-shaped text.
+
+The assembly-controlled nominal rocket integration test starts one persistent
+S32 invocation and verifies loading, stabilization, simulated supervisor
+approvals, terminal count, ignition feedback, completion, and confirmed
+closed/safe shutdown. The observed host run uses 19 scenario ticks, 248
+instructions, and 391 virtual cycles. These bounded observed counts are
+regression evidence, not WCET.
 
 The host `run examples/countdown.asm 9` case halts after nine steps and cycles
 with `PC=0x00000014` and `R1=0`. Budget 8 is rejected before `HALT` with exit
@@ -78,5 +98,7 @@ valves, and halts. The simulator updates read-only pressure without restarting
 the machine. The current QNX link was
 attempted but the local QNX
 license lock timed out, so the earlier binary hash is not evidence for this
-source. QNX cross-build and Raspberry Pi 5 execution remain to be captured; the
+source. The expanded five-crate workspace compiled its QNX-target libraries on
+2026-09-19, then the final app link again failed after the QNX license lock
+timed out. QNX linking and Raspberry Pi 5 execution remain to be captured; the
 exact operator procedure is in `docs/development.md`.

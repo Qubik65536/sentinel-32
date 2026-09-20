@@ -1,0 +1,750 @@
+schema: sentinel.scenario/v0
+id: rocket_launch_default
+publication: 1
+tick_ms: 1000
+metadata:
+  name: Normalized rocket launch-pad digital twin
+  description: A deterministic educational simulation with normalized values; it is not a real launch procedure.
+  tags: [demo, deterministic, software_only]
+types:
+  binary_state:
+    variants: [off, on]
+  valve_state:
+    variants: [closed, open]
+  ignition_state:
+    variants: [safe, armed, firing]
+telemetry:
+  fuel_pressure:
+    type: i32
+    unit: pressure_milli
+    range: {min: 0, max: 100000}
+    initial: 0
+    stale_after_ticks: 2
+    bands:
+      low: {min: 0, max: 49999}
+      launch: {min: 50000, max: 70000}
+      high: {min: 70001, max: 89999}
+      critical: {min: 90000, max: 100000}
+  oxidizer_pressure:
+    type: i32
+    unit: pressure_milli
+    range: {min: 0, max: 100000}
+    initial: 0
+    stale_after_ticks: 2
+    bands:
+      low: {min: 0, max: 49999}
+      launch: {min: 50000, max: 70000}
+      high: {min: 70001, max: 89999}
+      critical: {min: 90000, max: 100000}
+  sequence_timer:
+    type: u32
+    unit: tick
+    range: {min: 0, max: 60}
+    initial: 0
+    stale_after_ticks: 2
+  controller_power:
+    type: bool
+    unit: none
+    initial: true
+    stale_after_ticks: 2
+  primary_power:
+    type: bool
+    unit: none
+    initial: true
+    stale_after_ticks: 2
+  backup_power:
+    type: bool
+    unit: none
+    initial: true
+    stale_after_ticks: 2
+  ignition_continuity:
+    type: bool
+    unit: none
+    initial: true
+    stale_after_ticks: 2
+  flight_ready:
+    type: bool
+    unit: none
+    initial: true
+    stale_after_ticks: 2
+  range_clear:
+    type: bool
+    unit: none
+    initial: true
+    stale_after_ticks: 2
+  pad_clear:
+    type: bool
+    unit: none
+    initial: true
+    stale_after_ticks: 2
+  remote_inhibit:
+    type: bool
+    unit: none
+    initial: false
+    stale_after_ticks: 2
+actuators:
+  fuel_fill_valve:
+    type: valve_state
+    unit: none
+    initial: closed
+    safe_default: closed
+    deenergized: closed
+    privilege: ordinary
+    reversibility: reversible
+    feedback: feedback.fuel_fill_position
+    feedback_timeout_ticks: 2
+    mutually_exclusive: []
+    allow_preserve_current: false
+    command: set
+  oxidizer_fill_valve:
+    type: valve_state
+    unit: none
+    initial: closed
+    safe_default: closed
+    deenergized: closed
+    privilege: ordinary
+    reversibility: reversible
+    feedback: feedback.oxidizer_fill_position
+    feedback_timeout_ticks: 2
+    mutually_exclusive: []
+    allow_preserve_current: false
+    command: set
+  fuel_main_valve:
+    type: valve_state
+    unit: none
+    initial: closed
+    safe_default: closed
+    deenergized: closed
+    privilege: ordinary
+    reversibility: reversible
+    feedback: feedback.fuel_main_position
+    feedback_timeout_ticks: 2
+    mutually_exclusive: []
+    allow_preserve_current: false
+    command: set
+  oxidizer_main_valve:
+    type: valve_state
+    unit: none
+    initial: closed
+    safe_default: closed
+    deenergized: closed
+    privilege: ordinary
+    reversibility: reversible
+    feedback: feedback.oxidizer_main_position
+    feedback_timeout_ticks: 2
+    mutually_exclusive: []
+    allow_preserve_current: false
+    command: set
+  vent_valve:
+    type: valve_state
+    unit: none
+    initial: closed
+    safe_default: closed
+    deenergized: closed
+    privilege: ordinary
+    reversibility: reversible
+    feedback: feedback.vent_position
+    feedback_timeout_ticks: 2
+    mutually_exclusive: []
+    allow_preserve_current: false
+    command: set
+  ignition:
+    type: ignition_state
+    unit: none
+    initial: safe
+    safe_default: safe
+    deenergized: safe
+    privilege: ordinary
+    reversibility: attempt_latched
+    feedback: feedback.ignition_feedback
+    feedback_timeout_ticks: 1
+    mutually_exclusive: []
+    allow_preserve_current: false
+    command: set
+  diagnostic_alarm:
+    type: binary_state
+    unit: none
+    initial: off
+    safe_default: on
+    deenergized: off
+    privilege: supervisor
+    reversibility: reversible
+    mutually_exclusive: []
+    allow_preserve_current: false
+    command: set
+feedback:
+  fuel_fill_position:
+    type: valve_state
+    unit: none
+    initial: closed
+    stale_after_ticks: 2
+    actuator: actuator.fuel_fill_valve
+    confirms: {compare: {op: eq, left: {ref: feedback.fuel_fill_position}, right: {ref: actuator.fuel_fill_valve}}}
+  oxidizer_fill_position:
+    type: valve_state
+    unit: none
+    initial: closed
+    stale_after_ticks: 2
+    actuator: actuator.oxidizer_fill_valve
+    confirms: {compare: {op: eq, left: {ref: feedback.oxidizer_fill_position}, right: {ref: actuator.oxidizer_fill_valve}}}
+  fuel_main_position:
+    type: valve_state
+    unit: none
+    initial: closed
+    stale_after_ticks: 2
+    actuator: actuator.fuel_main_valve
+    confirms: {compare: {op: eq, left: {ref: feedback.fuel_main_position}, right: {ref: actuator.fuel_main_valve}}}
+  oxidizer_main_position:
+    type: valve_state
+    unit: none
+    initial: closed
+    stale_after_ticks: 2
+    actuator: actuator.oxidizer_main_valve
+    confirms: {compare: {op: eq, left: {ref: feedback.oxidizer_main_position}, right: {ref: actuator.oxidizer_main_valve}}}
+  vent_position:
+    type: valve_state
+    unit: none
+    initial: closed
+    stale_after_ticks: 2
+    actuator: actuator.vent_valve
+    confirms: {compare: {op: eq, left: {ref: feedback.vent_position}, right: {ref: actuator.vent_valve}}}
+  ignition_feedback:
+    type: ignition_state
+    unit: none
+    initial: safe
+    stale_after_ticks: 1
+    actuator: actuator.ignition
+    confirms: {compare: {op: eq, left: {ref: feedback.ignition_feedback}, right: {ref: actuator.ignition}}}
+phases:
+  initial: idle
+  items:
+    idle:
+      entry: {const: {type: bool, value: true}}
+      completion: {const: {type: bool, value: false}}
+      timeout_ticks: 600
+      on_timeout: hold
+      armed: false
+      terminal: false
+      abort_terminal: false
+      transitions:
+        - id: start_loading
+          to: loading
+          trigger: supervisor
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+        - id: idle_abort
+          to: abort
+          trigger: abort
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+    loading:
+      entry: {const: {type: bool, value: true}}
+      completion:
+        all:
+          - {between: {value: {ref: telemetry.fuel_pressure}, min: {const: {type: i32, value: 50000}}, max: {const: {type: i32, value: 70000}}}}
+          - {between: {value: {ref: telemetry.oxidizer_pressure}, min: {const: {type: i32, value: 50000}}, max: {const: {type: i32, value: 70000}}}}
+      timeout_ticks: 20
+      on_timeout: abort
+      armed: false
+      terminal: false
+      abort_terminal: false
+      transitions:
+        - id: loading_complete
+          to: stabilize
+          trigger: automatic
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+        - id: loading_hold
+          to: hold
+          trigger: hold
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+        - id: loading_abort
+          to: abort
+          trigger: abort
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+    stabilize:
+      entry: {const: {type: bool, value: true}}
+      completion: {const: {type: bool, value: false}}
+      timeout_ticks: 20
+      on_timeout: hold
+      armed: false
+      terminal: false
+      abort_terminal: false
+      transitions:
+        - id: arm_launch
+          to: armed
+          trigger: supervisor
+          new_attempt: false
+          guard:
+            all:
+              - {between: {value: {ref: telemetry.fuel_pressure}, min: {const: {type: i32, value: 50000}}, max: {const: {type: i32, value: 70000}}}}
+              - {between: {value: {ref: telemetry.oxidizer_pressure}, min: {const: {type: i32, value: 50000}}, max: {const: {type: i32, value: 70000}}}}
+              - {ref: telemetry.controller_power}
+              - {any: [{ref: telemetry.primary_power}, {ref: telemetry.backup_power}]}
+              - {ref: telemetry.ignition_continuity}
+              - {ref: telemetry.flight_ready}
+              - {ref: telemetry.range_clear}
+              - {ref: telemetry.pad_clear}
+              - {not: {ref: telemetry.remote_inhibit}}
+        - id: stabilize_hold
+          to: hold
+          trigger: hold
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+        - id: stabilize_abort
+          to: abort
+          trigger: abort
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+    armed:
+      entry: {const: {type: bool, value: true}}
+      completion: {const: {type: bool, value: false}}
+      timeout_ticks: 20
+      on_timeout: abort
+      armed: true
+      terminal: false
+      abort_terminal: false
+      transitions:
+        - id: begin_terminal_count
+          to: terminal_count
+          trigger: supervisor
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+        - id: armed_hold
+          to: hold
+          trigger: hold
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+        - id: armed_abort
+          to: abort
+          trigger: abort
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+    terminal_count:
+      entry: {const: {type: bool, value: true}}
+      completion: {compare: {op: ge, left: {ref: telemetry.sequence_timer}, right: {const: {type: u32, value: 5}}}}
+      timeout_ticks: 10
+      on_timeout: abort
+      armed: true
+      terminal: false
+      abort_terminal: false
+      transitions:
+        - id: commit_ignition
+          to: ignition
+          trigger: automatic
+          new_attempt: false
+          guard:
+            all:
+              - {between: {value: {ref: telemetry.fuel_pressure}, min: {const: {type: i32, value: 50000}}, max: {const: {type: i32, value: 70000}}}}
+              - {between: {value: {ref: telemetry.oxidizer_pressure}, min: {const: {type: i32, value: 50000}}, max: {const: {type: i32, value: 70000}}}}
+              - {ref: telemetry.controller_power}
+              - {any: [{ref: telemetry.primary_power}, {ref: telemetry.backup_power}]}
+              - {ref: telemetry.ignition_continuity}
+              - {ref: telemetry.flight_ready}
+              - {ref: telemetry.range_clear}
+              - {ref: telemetry.pad_clear}
+              - {not: {ref: telemetry.remote_inhibit}}
+              - {compare: {op: eq, left: {ref: feedback.fuel_fill_position}, right: {const: {type: valve_state, value: closed}}}}
+              - {compare: {op: eq, left: {ref: feedback.oxidizer_fill_position}, right: {const: {type: valve_state, value: closed}}}}
+        - id: countdown_hold
+          to: hold
+          trigger: hold
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+        - id: countdown_abort
+          to: abort
+          trigger: abort
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+    ignition:
+      entry: {const: {type: bool, value: true}}
+      completion: {compare: {op: eq, left: {ref: feedback.ignition_feedback}, right: {const: {type: ignition_state, value: firing}}}}
+      timeout_ticks: 3
+      on_timeout: abort
+      armed: true
+      terminal: false
+      abort_terminal: false
+      transitions:
+        - id: ignition_confirmed
+          to: complete
+          trigger: automatic
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+        - id: ignition_abort
+          to: abort
+          trigger: abort
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+    hold:
+      entry: {const: {type: bool, value: true}}
+      completion: {const: {type: bool, value: false}}
+      timeout_ticks: 600
+      on_timeout: hold
+      armed: false
+      terminal: false
+      abort_terminal: false
+      transitions:
+        - id: resume_stabilize
+          to: stabilize
+          trigger: supervisor
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+        - id: hold_abort
+          to: abort
+          trigger: abort
+          new_attempt: false
+          guard: {const: {type: bool, value: true}}
+    complete:
+      entry: {const: {type: bool, value: true}}
+      completion: {const: {type: bool, value: true}}
+      timeout_ticks: 0
+      on_timeout: hold
+      armed: false
+      terminal: true
+      abort_terminal: false
+      transitions:
+        - id: complete_new_attempt
+          to: idle
+          trigger: supervisor
+          new_attempt: true
+          guard: {const: {type: bool, value: true}}
+    abort:
+      entry: {const: {type: bool, value: true}}
+      completion: {const: {type: bool, value: true}}
+      timeout_ticks: 0
+      on_timeout: hold
+      armed: false
+      terminal: true
+      abort_terminal: true
+      transitions:
+        - id: abort_new_attempt
+          to: idle
+          trigger: supervisor
+          new_attempt: true
+          guard: {const: {type: bool, value: true}}
+rules:
+  critical_pressure:
+    condition:
+      any:
+        - {compare: {op: ge, left: {ref: telemetry.fuel_pressure}, right: {const: {type: i32, value: 90000}}}}
+        - {compare: {op: ge, left: {ref: telemetry.oxidizer_pressure}, right: {const: {type: i32, value: 90000}}}}
+    scope: global
+    severity: abort
+    response: {abort: {profile: critical_pressure}}
+    message: Critical normalized pressure latches abort.
+  launch_pressure_invalid:
+    condition:
+      not:
+        all:
+          - {between: {value: {ref: telemetry.fuel_pressure}, min: {const: {type: i32, value: 50000}}, max: {const: {type: i32, value: 70000}}}}
+          - {between: {value: {ref: telemetry.oxidizer_pressure}, min: {const: {type: i32, value: 50000}}, max: {const: {type: i32, value: 70000}}}}
+    scope: [armed, terminal_count, ignition]
+    severity: hold
+    response: {hold: {profile: launch_hold}}
+    message: Both normalized pressures must remain in the launch band.
+  fill_ignition_conflict:
+    condition:
+      all:
+        - {compare: {op: ne, left: {ref: actuator.ignition}, right: {const: {type: ignition_state, value: safe}}}}
+        - any:
+            - {compare: {op: eq, left: {ref: actuator.fuel_fill_valve}, right: {const: {type: valve_state, value: open}}}}
+            - {compare: {op: eq, left: {ref: actuator.oxidizer_fill_valve}, right: {const: {type: valve_state, value: open}}}}
+    scope: global
+    severity: abort
+    response: {abort: {profile: launch_abort}}
+    message: Ignition and filling are mutually exclusive.
+  ignition_outside_launch_phase:
+    condition:
+      all:
+        - {compare: {op: eq, left: {ref: actuator.ignition}, right: {const: {type: ignition_state, value: firing}}}}
+        - {not: {phase_is: ignition}}
+    scope: global
+    severity: abort
+    response: {abort: {profile: launch_abort}}
+    message: Ignition firing is forbidden outside the ignition phase.
+  valve_feedback_mismatch:
+    condition:
+      any:
+        - {compare: {op: ne, left: {ref: actuator.fuel_fill_valve}, right: {ref: feedback.fuel_fill_position}}}
+        - {compare: {op: ne, left: {ref: actuator.oxidizer_fill_valve}, right: {ref: feedback.oxidizer_fill_position}}}
+        - {compare: {op: ne, left: {ref: actuator.fuel_main_valve}, right: {ref: feedback.fuel_main_position}}}
+        - {compare: {op: ne, left: {ref: actuator.oxidizer_main_valve}, right: {ref: feedback.oxidizer_main_position}}}
+        - {compare: {op: ne, left: {ref: actuator.vent_valve}, right: {ref: feedback.vent_position}}}
+        - {compare: {op: ne, left: {ref: actuator.ignition}, right: {ref: feedback.ignition_feedback}}}
+    scope: global
+    severity: hold
+    response: {hold: {profile: valve_hold}}
+    message: Command and simulated feedback disagree.
+  electrical_unavailable:
+    condition:
+      any:
+        - {not: {ref: telemetry.controller_power}}
+        - {all: [{not: {ref: telemetry.primary_power}}, {not: {ref: telemetry.backup_power}}]}
+    scope: [armed, terminal_count, ignition]
+    severity: abort
+    response: {abort: {profile: launch_abort}}
+    message: Controller and at least one approved bus must be ready.
+  launch_interlock_missing:
+    condition:
+      any:
+        - {not: {ref: telemetry.ignition_continuity}}
+        - {not: {ref: telemetry.flight_ready}}
+        - {not: {ref: telemetry.range_clear}}
+        - {not: {ref: telemetry.pad_clear}}
+        - {ref: telemetry.remote_inhibit}
+    scope: [armed, terminal_count, ignition]
+    severity: hold
+    response: {hold: {profile: launch_hold}}
+    message: A launch readiness interlock is missing.
+  stale_safety_input:
+    condition:
+      any:
+        - {not: {fresh: {ref: telemetry.fuel_pressure, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: telemetry.oxidizer_pressure, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: telemetry.sequence_timer, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: telemetry.controller_power, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: telemetry.primary_power, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: telemetry.backup_power, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: telemetry.ignition_continuity, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: telemetry.flight_ready, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: telemetry.range_clear, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: telemetry.pad_clear, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: telemetry.remote_inhibit, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: feedback.fuel_fill_position, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: feedback.oxidizer_fill_position, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: feedback.fuel_main_position, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: feedback.oxidizer_main_position, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: feedback.vent_position, max_age_ticks: 2}}}
+        - {not: {fresh: {ref: feedback.ignition_feedback, max_age_ticks: 1}}}
+    scope: global
+    severity: hold
+    response: {hold: {profile: launch_hold}}
+    message: Safety-relevant telemetry or feedback is stale.
+  armed_update_forbidden:
+    condition:
+      any:
+        - {phase_is: armed}
+        - {phase_is: terminal_count}
+        - {phase_is: ignition}
+    scope: global
+    severity: advisory
+    response: {observe: true}
+    message: Firmware and scenario replacement is forbidden while armed.
+  remote_abort:
+    condition: {fault_active: remote_abort}
+    scope: global
+    severity: abort
+    response: {abort: {profile: launch_abort}}
+    message: The deterministic remote-abort fixture is active.
+safe_states:
+  defaults:
+    actuator.fuel_fill_valve: {set: closed}
+    actuator.oxidizer_fill_valve: {set: closed}
+    actuator.fuel_main_valve: {set: closed}
+    actuator.oxidizer_main_valve: {set: closed}
+    actuator.vent_valve: {set: closed}
+    actuator.ignition: {set: safe}
+    actuator.diagnostic_alarm: {set: on}
+  profiles:
+    launch_abort:
+      layer: abort_latch
+      actions:
+        actuator.fuel_fill_valve: {deenergize: true}
+        actuator.oxidizer_fill_valve: {deenergize: true}
+        actuator.fuel_main_valve: {set: closed}
+        actuator.oxidizer_main_valve: {set: closed}
+        actuator.vent_valve: {set: open}
+        actuator.ignition: {deenergize: true}
+        actuator.diagnostic_alarm: {set: on}
+    critical_pressure:
+      layer: hazard
+      priority: 20
+      when:
+        any:
+          - {compare: {op: ge, left: {ref: telemetry.fuel_pressure}, right: {const: {type: i32, value: 90000}}}}
+          - {compare: {op: ge, left: {ref: telemetry.oxidizer_pressure}, right: {const: {type: i32, value: 90000}}}}
+      actions:
+        actuator.fuel_fill_valve: {set: closed}
+        actuator.oxidizer_fill_valve: {set: closed}
+        actuator.vent_valve: {set: open}
+        actuator.ignition: {set: safe}
+        actuator.diagnostic_alarm: {set: on}
+    valve_hold:
+      layer: hazard
+      priority: 10
+      when:
+        any:
+          - {compare: {op: ne, left: {ref: actuator.fuel_fill_valve}, right: {ref: feedback.fuel_fill_position}}}
+          - {compare: {op: ne, left: {ref: actuator.oxidizer_fill_valve}, right: {ref: feedback.oxidizer_fill_position}}}
+          - {compare: {op: ne, left: {ref: actuator.fuel_main_valve}, right: {ref: feedback.fuel_main_position}}}
+          - {compare: {op: ne, left: {ref: actuator.oxidizer_main_valve}, right: {ref: feedback.oxidizer_main_position}}}
+          - {compare: {op: ne, left: {ref: actuator.vent_valve}, right: {ref: feedback.vent_position}}}
+          - {compare: {op: ne, left: {ref: actuator.ignition}, right: {ref: feedback.ignition_feedback}}}
+      actions:
+        actuator.ignition: {set: safe}
+    launch_hold:
+      layer: hazard
+      priority: 15
+      when:
+        any:
+          - {not: {between: {value: {ref: telemetry.fuel_pressure}, min: {const: {type: i32, value: 50000}}, max: {const: {type: i32, value: 70000}}}}}
+          - {not: {between: {value: {ref: telemetry.oxidizer_pressure}, min: {const: {type: i32, value: 50000}}, max: {const: {type: i32, value: 70000}}}}}
+      actions:
+        actuator.fuel_fill_valve: {set: closed}
+        actuator.oxidizer_fill_valve: {set: closed}
+        actuator.ignition: {set: safe}
+    terminal_count_safe:
+      layer: phase
+      phase: terminal_count
+      actions:
+        actuator.fuel_fill_valve: {set: closed}
+        actuator.oxidizer_fill_valve: {set: closed}
+        actuator.ignition: {set: safe}
+dynamics:
+  fuel_pressure_rise:
+    when: {compare: {op: eq, left: {ref: actuator.fuel_fill_valve}, right: {const: {type: valve_state, value: open}}}}
+    target: telemetry.fuel_pressure
+    add_clamped: 10000
+  oxidizer_pressure_rise:
+    when: {compare: {op: eq, left: {ref: actuator.oxidizer_fill_valve}, right: {const: {type: valve_state, value: open}}}}
+    target: telemetry.oxidizer_pressure
+    add_clamped: 10000
+  sequence_timer_tick:
+    when: {phase_is: terminal_count}
+    target: telemetry.sequence_timer
+    add_clamped: 1
+  controller_power_refresh:
+    target: telemetry.controller_power
+    set: true
+  primary_power_refresh:
+    target: telemetry.primary_power
+    set: true
+  backup_power_refresh:
+    target: telemetry.backup_power
+    set: true
+  continuity_refresh:
+    target: telemetry.ignition_continuity
+    set: true
+  flight_ready_refresh:
+    target: telemetry.flight_ready
+    set: true
+  range_clear_refresh:
+    target: telemetry.range_clear
+    set: true
+  pad_clear_refresh:
+    target: telemetry.pad_clear
+    set: true
+  remote_inhibit_refresh:
+    target: telemetry.remote_inhibit
+    set: false
+  fuel_fill_feedback:
+    target: feedback.fuel_fill_position
+    confirm_after: {actuator: actuator.fuel_fill_valve, delay_ticks: 1}
+  oxidizer_fill_feedback:
+    target: feedback.oxidizer_fill_position
+    confirm_after: {actuator: actuator.oxidizer_fill_valve, delay_ticks: 1}
+  fuel_main_feedback:
+    target: feedback.fuel_main_position
+    confirm_after: {actuator: actuator.fuel_main_valve, delay_ticks: 1}
+  oxidizer_main_feedback:
+    target: feedback.oxidizer_main_position
+    confirm_after: {actuator: actuator.oxidizer_main_valve, delay_ticks: 1}
+  vent_feedback:
+    target: feedback.vent_position
+    confirm_after: {actuator: actuator.vent_valve, delay_ticks: 1}
+  ignition_feedback:
+    target: feedback.ignition_feedback
+    confirm_after: {actuator: actuator.ignition, delay_ticks: 1}
+faults:
+  fuel_overpressure:
+    activation: fixture
+    one_shot: false
+    priority: 20
+    effects:
+      - override: {target: telemetry.fuel_pressure, value: 95000}
+  oxidizer_overpressure:
+    activation: fixture
+    one_shot: false
+    priority: 19
+    effects:
+      - override: {target: telemetry.oxidizer_pressure, value: 95000}
+  fuel_pressure_drift:
+    activation: fixture
+    one_shot: false
+    priority: 18
+    effects:
+      - bias_clamped: {target: telemetry.fuel_pressure, amount: -20000}
+  fuel_pressure_stale:
+    activation: fixture
+    one_shot: false
+    priority: 17
+    effects:
+      - drop_updates: {target: telemetry.fuel_pressure}
+  fuel_fill_stuck:
+    activation: fixture
+    one_shot: false
+    priority: 16
+    effects:
+      - freeze: {target: feedback.fuel_fill_position}
+  oxidizer_fill_stuck:
+    activation: fixture
+    one_shot: false
+    priority: 15
+    effects:
+      - freeze: {target: feedback.oxidizer_fill_position}
+  both_buses_lost:
+    activation: fixture
+    one_shot: false
+    priority: 14
+    effects:
+      - override: {target: telemetry.primary_power, value: false}
+      - override: {target: telemetry.backup_power, value: false}
+  continuity_lost:
+    activation: fixture
+    one_shot: false
+    priority: 13
+    effects:
+      - override: {target: telemetry.ignition_continuity, value: false}
+  flight_not_ready:
+    activation: fixture
+    one_shot: false
+    priority: 12
+    effects:
+      - override: {target: telemetry.flight_ready, value: false}
+  clearance_revoked:
+    activation: fixture
+    one_shot: false
+    priority: 11
+    effects:
+      - override: {target: telemetry.range_clear, value: false}
+      - override: {target: telemetry.pad_clear, value: false}
+  remote_inhibit_active:
+    activation: fixture
+    one_shot: false
+    priority: 10
+    effects:
+      - override: {target: telemetry.remote_inhibit, value: true}
+  delayed_main_valve:
+    activation: fixture
+    one_shot: false
+    priority: 9
+    effects:
+      - delay_feedback: {target: feedback.fuel_main_position, ticks: 2}
+  remote_abort:
+    activation: supervisor
+    one_shot: true
+    priority: 8
+    effects:
+      - override: {target: telemetry.remote_inhibit, value: true}
+layout:
+  panels:
+    launch_status:
+      title: Launch status
+      nodes: [fuel_pressure, oxidizer_pressure, ignition, alarm]
+  nodes:
+    fuel_pressure: {reference: telemetry.fuel_pressure, x: 0, y: 0, width: 4, height: 2, style: gauge}
+    oxidizer_pressure: {reference: telemetry.oxidizer_pressure, x: 4, y: 0, width: 4, height: 2, style: gauge}
+    ignition: {reference: actuator.ignition, x: 0, y: 2, width: 4, height: 2, style: command}
+    alarm: {reference: actuator.diagnostic_alarm, x: 4, y: 2, width: 4, height: 2, style: alarm}

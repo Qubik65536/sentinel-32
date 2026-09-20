@@ -54,6 +54,19 @@ impl fmt::Display for RuntimeError {
 
 impl std::error::Error for RuntimeError {}
 
+pub fn evaluate_condition(
+    expression: &Expression,
+    state: &RuntimeState,
+) -> Result<bool, RuntimeError> {
+    eval_bool(
+        expression,
+        &state.values,
+        &state.ages,
+        &state.phase,
+        &state.active_faults,
+    )
+}
+
 #[derive(Clone, Debug)]
 pub struct Runtime {
     bundle: CompiledBundle,
@@ -134,6 +147,25 @@ impl Runtime {
         }
 
         let active_faults = self.resolve_faults(input);
+        for id in &active_faults {
+            let Some(fault) = self.bundle.faults.get(id) else {
+                continue;
+            };
+            for effect in &fault.effects {
+                if matches!(
+                    effect,
+                    FaultEffect::Freeze { .. } | FaultEffect::DropUpdates { .. }
+                ) {
+                    let target = fault_target(effect);
+                    if let Some(value) = before.values.get(target) {
+                        values.insert(target.to_owned(), value.clone());
+                    }
+                    if let Some(age) = before.ages.get(target) {
+                        ages.insert(target.to_owned(), age.saturating_add(1));
+                    }
+                }
+            }
+        }
         let snapshot = values.clone();
         let mut proposed = BTreeMap::new();
         let dynamics = self.bundle.dynamics.clone();
@@ -158,15 +190,45 @@ impl Runtime {
         }
 
         let mut next_phase = before.phase.clone();
-        let phase = self.bundle.phases.items.get(&before.phase).ok_or_else(|| {
-            RuntimeError::Expression("current phase is absent from bundle".to_owned())
-        })?;
-        let mut selected = Vec::new();
+        let phase = self
+            .bundle
+            .phases
+            .items
+            .get(&before.phase)
+            .cloned()
+            .ok_or_else(|| {
+                RuntimeError::Expression("current phase is absent from bundle".to_owned())
+            })?;
+
+        let mut hold = false;
+        let mut abort_latched = before.abort_latched;
+        let mut active_rules = Vec::new();
+        for (id, rule) in &self.bundle.rules {
+            if rule_in_scope(rule, &before.phase)
+                && eval_bool(
+                    &rule.condition,
+                    &values,
+                    &ages,
+                    &before.phase,
+                    &active_faults,
+                )?
+            {
+                active_rules.push(id.clone());
+                match rule.severity {
+                    Severity::Hold => hold = true,
+                    Severity::Abort => abort_latched = true,
+                    Severity::Advisory | Severity::Inhibit => {}
+                }
+            }
+        }
+
+        let mut selected: Option<Transition> = None;
         if let Some(requested) = &input.transition {
             let transition = phase
                 .transitions
                 .iter()
                 .find(|transition| transition.id == *requested)
+                .cloned()
                 .ok_or_else(|| RuntimeError::UnknownTransition(requested.clone()))?;
             if transition.trigger == TransitionTrigger::Automatic {
                 return Err(RuntimeError::UnknownTransition(requested.clone()));
@@ -178,9 +240,14 @@ impl Runtime {
                 &before.phase,
                 &active_faults,
             )? {
-                selected.push(transition);
+                match transition.trigger {
+                    TransitionTrigger::Hold => hold = true,
+                    TransitionTrigger::Abort => abort_latched = true,
+                    TransitionTrigger::Automatic | TransitionTrigger::Supervisor => {}
+                }
+                selected = Some(transition);
             }
-        } else {
+        } else if !hold && !abort_latched {
             let complete = eval_bool(
                 &phase.completion,
                 &values,
@@ -188,6 +255,7 @@ impl Runtime {
                 &before.phase,
                 &active_faults,
             )?;
+            let mut automatic = Vec::new();
             for transition in &phase.transitions {
                 if complete
                     && transition.trigger == TransitionTrigger::Automatic
@@ -199,19 +267,46 @@ impl Runtime {
                         &active_faults,
                     )?
                 {
-                    selected.push(transition);
+                    automatic.push(transition.clone());
+                }
+            }
+            if automatic.len() > 1 {
+                let mut ids = automatic
+                    .iter()
+                    .map(|transition| transition.id.clone())
+                    .collect::<Vec<_>>();
+                ids.sort();
+                return Err(RuntimeError::TransitionAmbiguous(ids));
+            }
+            selected = automatic.pop();
+        }
+
+        if selected.is_none()
+            && phase.timeout_ticks > 0
+            && before.phase_ticks.saturating_add(1) >= phase.timeout_ticks
+        {
+            match &phase.on_timeout {
+                TimeoutAction::Builtin(TimeoutBuiltin::Hold) => hold = true,
+                TimeoutAction::Builtin(TimeoutBuiltin::Abort) => abort_latched = true,
+                TimeoutAction::Transition { transition } => {
+                    let target = phase
+                        .transitions
+                        .iter()
+                        .find(|candidate| {
+                            candidate.id == *transition
+                                && candidate.trigger == TransitionTrigger::Supervisor
+                        })
+                        .cloned()
+                        .ok_or_else(|| RuntimeError::UnknownTransition(transition.clone()))?;
+                    selected = Some(target);
                 }
             }
         }
-        if selected.len() > 1 {
-            return Err(RuntimeError::TransitionAmbiguous(
-                selected
-                    .iter()
-                    .map(|transition| transition.id.clone())
-                    .collect(),
-            ));
-        }
-        if let Some(transition) = selected.first() {
+
+        let new_attempt = selected
+            .as_ref()
+            .is_some_and(|transition| transition.new_attempt);
+        if let Some(transition) = &selected {
             next_phase.clone_from(&transition.to);
         }
         if next_phase != before.phase {
@@ -224,39 +319,11 @@ impl Runtime {
                 )));
             }
         }
-
-        let mut hold = false;
-        let mut abort_latched = before.abort_latched;
-        let mut active_rules = Vec::new();
-        for (id, rule) in &self.bundle.rules {
-            if rule_in_scope(rule, &next_phase)
-                && eval_bool(&rule.condition, &values, &ages, &next_phase, &active_faults)?
-            {
-                active_rules.push(id.clone());
-                match rule.severity {
-                    Severity::Hold => hold = true,
-                    Severity::Abort => abort_latched = true,
-                    Severity::Advisory | Severity::Inhibit => {}
-                }
-            }
-        }
-
-        if phase.timeout_ticks > 0 && before.phase_ticks.saturating_add(1) >= phase.timeout_ticks {
-            match &phase.on_timeout {
-                TimeoutAction::Builtin(TimeoutBuiltin::Hold) => hold = true,
-                TimeoutAction::Builtin(TimeoutBuiltin::Abort) => abort_latched = true,
-                TimeoutAction::Transition { transition } => {
-                    let target = phase
-                        .transitions
-                        .iter()
-                        .find(|candidate| {
-                            candidate.id == *transition
-                                && candidate.trigger == TransitionTrigger::Supervisor
-                        })
-                        .ok_or_else(|| RuntimeError::UnknownTransition(transition.clone()))?;
-                    next_phase.clone_from(&target.to);
-                }
-            }
+        if new_attempt {
+            abort_latched = false;
+            hold = false;
+            self.delay_queues.clear();
+            self.fired_one_shot.clear();
         }
 
         let phase_ticks = if next_phase == before.phase {

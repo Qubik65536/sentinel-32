@@ -109,6 +109,28 @@ The current scenario-enabled `sentinel-app` is an AArch64 ELF64 PIE using
 `50a2c8546e1f256f85d7429b7f1b3e68409559fbc13cdcab6b88cb6824146aae`.
 This result covers cross-compilation and linking, not target execution.
 
+## Expanded workspace cross-build attempt — 2026-09-19
+
+After adding `sentinel-safety`, `sentinel-ai-check`, the default rocket
+scenario, and its persistent assembly runner, the documented QNX command was
+run again under Bash:
+
+```sh
+source /var/home/qubik65536/qnx800/qnxsdp-env.sh
+cargo +qnx800 build --workspace \
+  --target aarch64-unknown-nto-qnx800 --release \
+  --target-dir target/qnx800
+```
+
+The QNX environment initialized and the target Rust compiler compiled the new
+`sentinel-scenario`, `sentinel-ai-check`, and `sentinel-safety` libraries. The
+final `sentinel-app` link failed with exit status 129 because the QNX license
+manager timed out acquiring
+`/home/qubik65536/.qnx/license/licenses.lck` after repeated ten-second waits.
+This is an unavailable license check, not a Rust compilation failure and not a
+passing QNX build. No new target artifact or target-execution evidence was
+recorded.
+
 ## Raspberry Pi 5 deployment directory
 
 The documented QNX target deployment root is
@@ -166,11 +188,11 @@ file target/qnx800/aarch64-unknown-nto-qnx800/release/sentinel-app
 sha256sum target/qnx800/aarch64-unknown-nto-qnx800/release/sentinel-app
 ```
 
-For the current tree, `file` must identify an AArch64 QNX PIE with interpreter
-`/usr/lib/ldqnx-64.so.2`, and the expected SHA-256 is
-`50a2c8546e1f256f85d7429b7f1b3e68409559fbc13cdcab6b88cb6824146aae`.
-If the source changes, record the new tested commit and hash instead of expecting
-this value.
+`file` must identify an AArch64 QNX PIE with interpreter
+`/usr/lib/ldqnx-64.so.2`. The prior three-crate artifact had SHA-256
+`50a2c8546e1f256f85d7429b7f1b3e68409559fbc13cdcab6b88cb6824146aae`;
+it does not identify the current source. Record the newly built binary's hash
+with the tested commit instead of expecting the prior value.
 
 Copy both the executable and source fixture to the Pi using the documented
 `qnxuser@qnxpi59.local` target:
@@ -280,8 +302,71 @@ It must report a cycle-budget-exceeded error and exit `2`; the firmware must not
 be restarted to finish the operation.
 Record the exact output, exit statuses, tested source commit, binary hash, and
 target image identity. Keep the executable and fixtures in the documented
-deployment tree. Generated `hardware-bundle.json` and `hardware-symbols.inc` may be
+deployment tree. Generated hardware and rocket bundle/symbol artifacts may be
 replaced by the next tested release after their evidence is captured.
+
+## SCEN-003 Raspberry Pi 5 smoke test
+
+The build/upload wrapper transfers the default rocket scenario, its S32
+controller, and the host-built canonical bundle and symbols. On the target,
+first validate the scenario:
+
+```sh
+/data/home/qnxuser/sentinel-32/release/sentinel-app scenario-check \
+  /data/home/qnxuser/sentinel-32/examples/rocket-launch-default.yaml
+echo $?
+```
+
+The command must report scenario `rocket_launch_default`, publication `1`, 23
+MMIO entries, bundle hash
+`72975636c2b7c0db7931bc09defcd3ce27adc3ab98f76fa4d908128f94c25388`,
+and exit `0`.
+
+Then start the persistent assembly-controlled sample:
+
+```sh
+/data/home/qnxuser/sentinel-32/release/sentinel-app rocket-run \
+  /data/home/qnxuser/sentinel-32/examples/rocket-launch-default.yaml \
+  /data/home/qnxuser/sentinel-32/examples/rocket-controller.asm \
+  5000
+echo $?
+```
+
+The procedure is:
+
+1. The operator starts one S32 invocation and the runner records
+   `start_loading` as the operator-start transition.
+2. Assembly polls both pressure MMIO registers and independently commands each
+   fill valve until the normalized firmware threshold of `50000` is reached.
+3. Assembly closes the fill valves for two command frames, then reads controller
+   power, both buses, continuity, flight readiness, range and pad clearance, and
+   the remote inhibit. Any failed check enters the assembly abort path.
+4. The runner records explicit simulated `arm_launch` and
+   `begin_terminal_count` supervisor approvals when the firmware requests the
+   armed state. The approvals are outside firmware authority.
+5. Assembly observes the scenario timer until tick 5, opens both main valves,
+   requests ignition, and waits for ignition feedback.
+6. Assembly commands all valves closed and ignition safe for two frames, waits
+   for the one-tick feedback delay to settle, and halts.
+
+The run must begin with `rocket-firmware scenario=rocket_launch_default`, the
+same bundle hash, `start=operator_once`, and `cycle_budget=5000`. Its final line
+must report:
+
+```text
+operation=complete firmware_status=halted firmware_steps=248 firmware_cycles=391 scenario_ticks=19 final_phase=complete final_requests=[actuator.fuel_fill_valve=closed,actuator.fuel_main_valve=closed,actuator.ignition=safe,actuator.oxidizer_fill_valve=closed,actuator.oxidizer_main_valve=closed,actuator.vent_valve=closed]
+```
+
+The process must exit `0`. This is a deterministic nominal software-twin run;
+it is not a real launch procedure, formal proof, or physical timing evidence.
+Run the fault and boundary truth tables on the host with:
+
+```sh
+cargo test -p sentinel-scenario rocket_ -- --nocapture
+```
+
+Record the QNX commands, complete output, exit statuses, tested commit, binary
+hash, and target image with the run evidence.
 
 ## Required BUILD-001 evidence
 

@@ -27,7 +27,13 @@ At least these immutable policy families must be enforced outside firmware:
 7. Stale safety-relevant telemetry blocks dependent transitions and commands.
 8. Firmware or scenario replacement is forbidden after the launch system becomes armed.
 
-Exact expressions, severity, precedence, and counterexample semantics remain work for `SCEN-001` and `SAFE-001`. They must be typed scenario policy rather than identifiers hard-coded into the generic VM.
+The default launch expressions, severities, and responses are compiled from
+`examples/rocket-launch-default.yaml`; no rocket identifier is hard-coded in
+the VM, scenario runtime, or output gate. `sentinel-safety` consumes the active
+typed rule IDs reported by the runtime. Pressure-band edges, feedback
+agreement, power combinations, readiness inputs, staleness, abort persistence,
+authority loss, and armed-time replacement have explicit host truth-table
+tests. Counterexample production remains future `SAFE-003` work.
 
 ## Safe-state resolution
 
@@ -39,7 +45,23 @@ Resolution is deterministic and phase aware. The intended precedence is:
 4. current-phase policy;
 5. actuator default safe action.
 
-Every safety-relevant actuator needs an explicit resolved action for every reachable emergency profile. `preserve_current` is valid only when the schema explicitly permits and justifies it. Equal-priority contradictions, missing coverage, dangling references, unit errors, or non-total expressions prevent publication.
+Every safety-relevant actuator needs an explicit resolved action for every reachable emergency profile. `preserve_current` is valid only when the schema explicitly permits and justifies it. The output gate counts consecutive preserved ticks and falls through to the next policy layer when the bound expires. Equal-priority contradictions, missing coverage, dangling references, unit errors, or non-total expressions prevent compilation.
+
+An ordinary request is `accepted`, `overridden`, or `rejected`. Accepted values
+retain the firmware request. Active hold, abort, force, lost-authority, or
+latched-abort state resolves a typed safe action and overrides the request. An
+inhibit response rejects its named request. Unknown actuators, invalid typed
+values, and ordinary requests to supervisor actuators are rejected. The stable
+reason codes are `OUTPUT_ACCEPTED`, `OUTPUT_RULE_INHIBIT`,
+`OUTPUT_SAFE_PROFILE`, `OUTPUT_SAFE_DEFAULT`, `OUTPUT_ABORT_LATCH`,
+`OUTPUT_AUTHORITY_UNAVAILABLE`, `OUTPUT_UNKNOWN_ACTUATOR`,
+`OUTPUT_INVALID_REQUEST`, `OUTPUT_SUPERVISOR_ONLY`, and
+`OUTPUT_MISSING_REQUEST`.
+
+The gate API contains no AI finding or score. An unavailable controller removes
+ordinary authority and resolves safe outputs. Armed-time firmware/scenario
+replacement is a separate deterministic decision based on the compiled current
+phase; advisory findings cannot allow it.
 
 ## Initial hazards and containment
 

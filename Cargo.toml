@@ -1,5 +1,11 @@
 [workspace]
-members = ["crates/sentinel-app", "crates/sentinel-core", "crates/sentinel-scenario"]
+members = [
+    "crates/sentinel-ai-check",
+    "crates/sentinel-app",
+    "crates/sentinel-core",
+    "crates/sentinel-safety",
+    "crates/sentinel-scenario",
+]
 resolver = "3"
 
 [workspace.package]

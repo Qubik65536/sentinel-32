@@ -29,8 +29,12 @@ cp "$APP" "$STAGING_TREE/release/sentinel-app"
 cp "$PROJECT_ROOT/examples/countdown.asm" "$STAGING_TREE/examples/countdown.asm"
 cp "$PROJECT_ROOT/examples/valve-controller.asm" \
   "$STAGING_TREE/examples/valve-controller.asm"
+cp "$PROJECT_ROOT/examples/rocket-controller.asm" \
+  "$STAGING_TREE/examples/rocket-controller.asm"
 cp "$PROJECT_ROOT/examples/lab-scenario.yaml" \
   "$STAGING_TREE/examples/lab-scenario.yaml"
+cp "$PROJECT_ROOT/examples/rocket-launch-default.yaml" \
+  "$STAGING_TREE/examples/rocket-launch-default.yaml"
 cp "$PROJECT_ROOT/Cargo.lock" "$STAGING_TREE/artifacts/Cargo.lock"
 
 (

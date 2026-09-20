@@ -8,8 +8,8 @@ This is a safety-oriented prototype and educational demonstration. It is not cer
 
 ## Current status
 
-The Rust workspace now contains `sentinel-core`, `sentinel-scenario`, and
-`sentinel-app`.
+The Rust workspace now contains `sentinel-core`, `sentinel-scenario`,
+`sentinel-safety`, `sentinel-ai-check`, and `sentinel-app`.
 `sentinel-core` implements typed S32 instruction decoding, canonical encoding,
 source assembly, and the reference interpreter. The interpreter validates image
 manifests and sparse mappings, enforces region permissions and manifest
@@ -17,7 +17,14 @@ capabilities, executes the complete S32 v0 instruction set, and applies atomic
 traps and deterministic virtual-cycle budgets. `sentinel-scenario` parses the
 bounded YAML subset, validates and compiles immutable scenario bundles and S32
 symbols, and executes deterministic dynamics, faults, rules, and phase changes.
-The app exposes the VM and scenario workflows.
+The default declarative rocket scenario exercises normalized propellant
+pressure, valve feedback, electrical power, ignition readiness, clearance,
+countdown, hold, abort, and named deterministic faults. `sentinel-safety`
+turns compiled rule results and firmware requests into accepted, overridden,
+or rejected outputs with stable reason codes. `sentinel-ai-check` defines and
+validates the bounded advisory snapshot, written-rule, and finding contract;
+it has no output or activation API. The app exposes the VM and scenario
+workflows.
 
 The QNX SDP 8.0 Build 14 toolchain cross-builds the workspace for
 `aarch64-unknown-nto-qnx800`, and the operator reports successful Raspberry Pi
@@ -88,6 +95,37 @@ without restarting the firmware. The
 [development guide](docs/development.md#scen-002-raspberry-pi-5-test) gives the
 equivalent Raspberry Pi 5 checks and expected output.
 
+Compile or inspect the default rocket launch-pad digital twin with:
+
+```sh
+cargo run -p sentinel-app -- scenario-check \
+  examples/rocket-launch-default.yaml
+cargo run -p sentinel-app -- scenario-compile \
+  examples/rocket-launch-default.yaml rocket-bundle.json rocket-symbols.inc
+cargo run -p sentinel-app -- rocket-run \
+  examples/rocket-launch-default.yaml examples/rocket-controller.asm 5000
+```
+
+The scenario compiles to 23 MMIO slots and a golden bundle hash recorded by its
+tests. One operator start launches a persistent S32 firmware invocation. The
+assembly owns pressure polling, the normalized 50000 loading threshold, valve
+commands, stabilization wait, electrical and readiness checks, countdown
+observation, ignition, feedback confirmation, shutdown, and its abort path. The
+runner provides the declarative software twin and records the operator start
+plus two simulated supervisor approvals. A nominal run reaches `complete` in 19
+scenario ticks, confirms the final closed/safe feedback state, and halts the
+same firmware invocation. Host integration tests also exercise exact pressure
+edges, telemetry staleness, valve faults, power and readiness loss,
+asynchronous hold and abort, abort persistence, and supervised new-attempt
+reset. These are deterministic software-twin results, not physical launch
+parameters or formal proof. The
+[development guide](docs/development.md#scen-003-raspberry-pi-5-smoke-test)
+gives the QNX command and expected output.
+
 ## Repository guide
 
-Start with [project scope](docs/project.md), [architecture](docs/architecture.md), and [safety model](docs/safety-model.md). Contributors and coding agents must follow [AGENTS.md](AGENTS.md) and select work from [.agent/plan.md](.agent/plan.md).
+Start with [project scope](docs/project.md), [architecture](docs/architecture.md),
+[safety model](docs/safety-model.md), and the
+[advisory AI contract](docs/advisory-ai.md). Contributors and coding agents
+must follow [AGENTS.md](AGENTS.md) and select work from
+[.agent/plan.md](.agent/plan.md).

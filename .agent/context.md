@@ -1,6 +1,7 @@
 # Repository context
 
-Last updated: 2026-09-19 during `ISA-003`.
+Last updated: 2026-09-19 during the `SCEN-003`/`TWIN-001`/`SAFE-001`/`AI-001`
+batch.
 
 ## Current implementation
 
@@ -21,6 +22,18 @@ firmware harness with YAML-allocated MMIO. `BOOT-002`, `ISA-002`,
 evidence dependency in `BUILD-001`; `SCEN-002` also awaits review of its schema
 clarification.
 
+`examples/rocket-launch-default.yaml` is the default normalized launch-pad
+digital twin. It compiles to 23 MMIO slots and exercises both pressure
+channels, fill/main/vent valves and feedback, electrical sources, ignition,
+readiness and clearance, phases, countdown, safe states, deterministic faults,
+hold, abort, and supervised new attempts. `sentinel-safety` implements typed
+accepted/overridden/rejected output decisions, deterministic safe-state
+precedence, authority-loss containment, and armed replacement denial.
+`sentinel-ai-check` implements the bounded and hash-bound snapshot, written
+rule, finding, provenance, and response-validation contract. The two crates
+have no production dependency between them, and an integration test proves
+that an advisory finding cannot alter output decisions.
+
 Canonical S32 source presentation uses lowercase MIPS-style mnemonics,
 directives, and registers with spaced operands. Markdown source examples use
 the `asm` fence, and standalone source files use the `.asm` extension so editors
@@ -39,15 +52,22 @@ Current requirements give AI one advisory function: compare a bounded current-st
 - `docs/architecture.md`: intended boundaries and lifecycle.
 - `docs/development.md`: host/QNX workflow and `BUILD-001` audit/blocker.
 - `docs/configuration.md`: intended configuration for core services and the advisory checker backends.
+- `docs/advisory-ai.md`: exact provider-neutral snapshot, written-rule, finding, hash, limit, and authority contract.
 - `docs/s32-isa.md`: accepted ISA v0 contract; implemented incrementally under `ISA-002` and `VM-001`.
 - `docs/scenario-schema.md`: accepted schema v0 contract and the concrete forms implemented by `SCEN-002`.
 - `crates/sentinel-core`: portable S32 ISA, assembler, VM, memory, traps, cycles, and tests.
 - `crates/sentinel-scenario`: strict parser, compiler, canonical artifacts, MMIO symbols, and deterministic runtime.
+- `crates/sentinel-safety`: deterministic safe-state resolution and output request decisions.
+- `crates/sentinel-ai-check`: provider-neutral bounded advisory checker types and validators.
 - `crates/sentinel-app`: host/QNX CLI for VM and scenario workflows.
 - `examples/countdown.asm`: source-level assembler smoke example.
 - `examples/lab-scenario.yaml`: hardware-only tank-pressure and two-valve MMIO inventory with no controller actions.
 - `crates/sentinel-scenario/src/test-scenario.yaml`: internal full-schema compiler fixture.
 - `examples/valve-controller.asm`: commented firmware that fills to a pressure target, holds ten simulated seconds, unloads, and closes both valves.
+- `examples/rocket-launch-default.yaml`: full declarative normalized rocket launch-pad scenario.
+- `examples/rocket-controller.asm`: persistent S32 controller for the nominal
+  normalized rocket run; firmware owns thresholds, waits, interlock checks,
+  actuator sequencing, ignition feedback, shutdown, and its abort path.
 - `docs/safety-model.md`: claims, invariant families, containment, evidence.
 - `docs/threat-model.md`: assets, untrusted boundaries, abuse cases, controls.
 - `docs/validation.md`: validation layers and current results.
@@ -60,9 +80,10 @@ Host checks pass under upstream Rust 1.98.1 on `x86_64-unknown-linux-gnu`.
 QNX SDP 8.0 Build 14 and linked toolchain `qnx800` produced the prior AArch64
 QNX 8.0 release binary. The prior scenario-enabled artifact had SHA-256
 `50a2c8546e1f256f85d7429b7f1b3e68409559fbc13cdcab6b88cb6824146aae`.
-The hardware-only update passes the host lane; its latest QNX link attempt was
-blocked by a local QNX license-lock timeout, so that older hash does not identify
-the current source.
+The five-crate rocket/safety/advisory and persistent assembly-runner update
+passes the host lane. The QNX target libraries and updated app objects compile,
+but the latest final link was blocked by a local QNX license-lock timeout, so
+that older hash does not identify the current source.
 The operator reports successful earlier Raspberry Pi 5 execution; exact target
 image, commands, output, exit status, and execution of the current artifact
 remain to be captured before `BUILD-001` is complete.
@@ -75,10 +96,11 @@ testing remains a separate operator SSH session.
 
 ## Next work
 
-Run the current binary's VM and scenario checks on the Raspberry Pi 5 and
-capture the evidence in `docs/development.md`; review the SCEN-002 schema
-clarification. The next functional work is `SCEN-003`, the default rocket
-scenario, or `VM-002` tracing.
+Review the SCEN-002 runtime clarification and SAFE-001 trusted safety behavior.
+Then resolve the QNX license lock, link the current workspace, run its VM and
+scenario checks on the Raspberry Pi 5, and capture the evidence in
+`docs/development.md`. The next unimplemented critical-path work is `SAFE-002`
+or `VM-002`; AI provider work begins with `AI-002` or `AI-003`.
 
 ## Working tree note
 

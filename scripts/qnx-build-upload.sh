@@ -64,6 +64,10 @@ host_cargo run --quiet --release -p sentinel-app -- hardware-compile \
   examples/lab-scenario.yaml \
   "$ARTIFACT_DIR/hardware-bundle.json" \
   "$ARTIFACT_DIR/hardware-symbols.inc"
+host_cargo run --quiet --release -p sentinel-app -- scenario-compile \
+  examples/rocket-launch-default.yaml \
+  "$ARTIFACT_DIR/rocket-bundle.json" \
+  "$ARTIFACT_DIR/rocket-symbols.inc"
 
 echo "==> Building the QNX release workspace"
 # shellcheck source=/dev/null
@@ -78,7 +82,9 @@ sha256sum "$QNX_APP"
 echo "==> Uploading the QNX release and artifacts"
 "$PROJECT_ROOT/scripts/qnx-pi-upload.sh" \
   "$ARTIFACT_DIR/hardware-bundle.json" \
-  "$ARTIFACT_DIR/hardware-symbols.inc"
+  "$ARTIFACT_DIR/hardware-symbols.inc" \
+  "$ARTIFACT_DIR/rocket-bundle.json" \
+  "$ARTIFACT_DIR/rocket-symbols.inc"
 
 echo "==> Build and upload complete"
 echo "Open the existing QNX SSH session and run the documented target tests."

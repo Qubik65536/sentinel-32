@@ -9,7 +9,7 @@ pub use compiler::{
     Diagnostic, HardwareRegister, HardwareSource, PriorAllocation, compile, compile_hardware,
 };
 pub use model::*;
-pub use runtime::{Runtime, RuntimeError, RuntimeState, TickInput, TickResult};
+pub use runtime::{Runtime, RuntimeError, RuntimeState, TickInput, TickResult, evaluate_condition};
 
 pub const SCHEMA_ID: &str = "sentinel.scenario/v0";
 pub const COMPILER_CONTRACT: &str = "sentinel-scenario-compiler/v0";
@@ -22,9 +22,110 @@ mod tests {
 
     const FIXTURE: &str = include_str!("test-scenario.yaml");
     const HARDWARE_FIXTURE: &str = include_str!("../../../examples/lab-scenario.yaml");
+    const ROCKET_FIXTURE: &str = include_str!("../../../examples/rocket-launch-default.yaml");
 
     fn compiled() -> Compilation {
         compile(FIXTURE, AllocationMode::Clean).unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    fn rocket_compiled() -> Compilation {
+        compile(ROCKET_FIXTURE, AllocationMode::Clean).unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    fn valve_requests(fill: &str, main: &str, ignition: &str) -> BTreeMap<String, ScalarValue> {
+        BTreeMap::from([
+            (
+                "actuator.fuel_fill_valve".to_owned(),
+                ScalarValue::Enum(fill.to_owned()),
+            ),
+            (
+                "actuator.oxidizer_fill_valve".to_owned(),
+                ScalarValue::Enum(fill.to_owned()),
+            ),
+            (
+                "actuator.fuel_main_valve".to_owned(),
+                ScalarValue::Enum(main.to_owned()),
+            ),
+            (
+                "actuator.oxidizer_main_valve".to_owned(),
+                ScalarValue::Enum(main.to_owned()),
+            ),
+            (
+                "actuator.vent_valve".to_owned(),
+                ScalarValue::Enum("closed".to_owned()),
+            ),
+            (
+                "actuator.ignition".to_owned(),
+                ScalarValue::Enum(ignition.to_owned()),
+            ),
+        ])
+    }
+
+    fn rocket_input(
+        fill: &str,
+        main: &str,
+        ignition: &str,
+        transition: Option<&str>,
+        faults: &[&str],
+    ) -> TickInput {
+        TickInput {
+            actuator_requests: valve_requests(fill, main, ignition),
+            active_faults: faults.iter().map(|fault| (*fault).to_owned()).collect(),
+            transition: transition.map(str::to_owned),
+            ..TickInput::default()
+        }
+    }
+
+    fn tick_rocket(runtime: &mut Runtime, mut input: TickInput) -> TickResult {
+        input.channel_updates = runtime
+            .state()
+            .values
+            .iter()
+            .filter(|(reference, _)| reference.starts_with("telemetry."))
+            .map(|(reference, value)| (reference.clone(), value.clone()))
+            .collect();
+        runtime
+            .tick(&input)
+            .unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    fn tick_rocket_with(
+        runtime: &mut Runtime,
+        mut input: TickInput,
+        updates: BTreeMap<String, ScalarValue>,
+    ) -> TickResult {
+        input.channel_updates = runtime
+            .state()
+            .values
+            .iter()
+            .filter(|(reference, _)| reference.starts_with("telemetry."))
+            .map(|(reference, value)| (reference.clone(), value.clone()))
+            .collect();
+        input.channel_updates.extend(updates);
+        runtime
+            .tick(&input)
+            .unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    fn advance_to_armed(runtime: &mut Runtime) {
+        tick_rocket(
+            runtime,
+            rocket_input("open", "closed", "safe", Some("start_loading"), &[]),
+        );
+        for _ in 0..20 {
+            if runtime.state().phase != "loading" {
+                break;
+            }
+            tick_rocket(runtime, rocket_input("open", "closed", "safe", None, &[]));
+        }
+        assert_eq!(runtime.state().phase, "stabilize");
+        tick_rocket(runtime, rocket_input("closed", "closed", "safe", None, &[]));
+        tick_rocket(runtime, rocket_input("closed", "closed", "safe", None, &[]));
+        tick_rocket(
+            runtime,
+            rocket_input("closed", "closed", "safe", Some("arm_launch"), &[]),
+        );
+        assert_eq!(runtime.state().phase, "armed");
     }
 
     #[test]
@@ -462,5 +563,246 @@ mod tests {
             once.state().values.get("telemetry.counter"),
             Some(&ScalarValue::Signed(51))
         );
+    }
+
+    #[test]
+    fn rocket_scenario_has_stable_identity_and_symbols() {
+        let first = rocket_compiled();
+        let second = rocket_compiled();
+        assert_eq!(first.bundle_hash, second.bundle_hash);
+        assert_eq!(
+            first.bundle_hash,
+            "72975636c2b7c0db7931bc09defcd3ce27adc3ab98f76fa4d908128f94c25388"
+        );
+        assert_eq!(first.bundle.mmio.len(), 23);
+        assert!(
+            first
+                .symbols
+                .contains(".equ S32_TELEMETRY_FUEL_PRESSURE, 0x4000000C")
+        );
+        assert!(
+            first
+                .symbols
+                .contains(".equ S32_ACTUATOR_IGNITION, 0x50000008")
+        );
+        assert!(
+            first
+                .symbols
+                .contains(".equ S32_FEEDBACK_IGNITION_FEEDBACK, 0x60000008")
+        );
+    }
+
+    #[test]
+    fn rocket_twin_runs_loading_countdown_ignition_and_completion() {
+        let mut runtime = Runtime::new(rocket_compiled().bundle);
+        advance_to_armed(&mut runtime);
+        tick_rocket(
+            &mut runtime,
+            rocket_input(
+                "closed",
+                "closed",
+                "armed",
+                Some("begin_terminal_count"),
+                &[],
+            ),
+        );
+        assert_eq!(runtime.state().phase, "terminal_count");
+        for _ in 0..5 {
+            tick_rocket(
+                &mut runtime,
+                rocket_input("closed", "closed", "armed", None, &[]),
+            );
+        }
+        assert_eq!(runtime.state().phase, "ignition");
+        tick_rocket(
+            &mut runtime,
+            rocket_input("closed", "open", "firing", None, &[]),
+        );
+        tick_rocket(
+            &mut runtime,
+            rocket_input("closed", "open", "firing", None, &[]),
+        );
+        assert_eq!(runtime.state().phase, "complete");
+        assert!(!runtime.state().abort_latched);
+    }
+
+    #[test]
+    fn rocket_twin_contains_pressure_power_continuity_clearance_and_valve_faults() {
+        for (fault, rule, abort) in [
+            ("fuel_overpressure", "critical_pressure", true),
+            ("oxidizer_overpressure", "critical_pressure", true),
+            ("fuel_pressure_drift", "launch_pressure_invalid", false),
+            ("both_buses_lost", "electrical_unavailable", true),
+            ("continuity_lost", "launch_interlock_missing", false),
+            ("flight_not_ready", "launch_interlock_missing", false),
+            ("clearance_revoked", "launch_interlock_missing", false),
+            ("remote_inhibit_active", "launch_interlock_missing", false),
+        ] {
+            let mut runtime = Runtime::new(rocket_compiled().bundle);
+            advance_to_armed(&mut runtime);
+            let result = tick_rocket(
+                &mut runtime,
+                rocket_input("closed", "closed", "safe", None, &[fault]),
+            );
+            assert!(result.active_rules.contains(&rule.to_owned()), "{fault}");
+            assert_eq!(result.abort_latched, abort, "{fault}");
+            assert!(abort || result.hold, "{fault}");
+        }
+
+        let mut stuck = Runtime::new(rocket_compiled().bundle);
+        tick_rocket(
+            &mut stuck,
+            rocket_input(
+                "open",
+                "closed",
+                "safe",
+                Some("start_loading"),
+                &["fuel_fill_stuck"],
+            ),
+        );
+        let result = tick_rocket(
+            &mut stuck,
+            rocket_input("open", "closed", "safe", None, &["fuel_fill_stuck"]),
+        );
+        assert!(
+            result
+                .active_rules
+                .contains(&"valve_feedback_mismatch".to_owned())
+        );
+        assert!(result.hold);
+
+        let mut delayed = Runtime::new(rocket_compiled().bundle);
+        advance_to_armed(&mut delayed);
+        tick_rocket(
+            &mut delayed,
+            rocket_input(
+                "closed",
+                "closed",
+                "armed",
+                Some("begin_terminal_count"),
+                &[],
+            ),
+        );
+        for _ in 0..5 {
+            tick_rocket(
+                &mut delayed,
+                rocket_input("closed", "closed", "armed", None, &[]),
+            );
+        }
+        let delayed_result = tick_rocket(
+            &mut delayed,
+            rocket_input("closed", "open", "firing", None, &["delayed_main_valve"]),
+        );
+        assert!(
+            delayed_result
+                .active_rules
+                .contains(&"valve_feedback_mismatch".to_owned())
+        );
+        assert!(delayed_result.hold);
+    }
+
+    #[test]
+    fn rocket_pressure_boundaries_and_staleness_have_explicit_results() {
+        for (pressure, pressure_invalid, critical) in [
+            (49_999, true, false),
+            (50_000, false, false),
+            (70_000, false, false),
+            (70_001, true, false),
+            (90_000, true, true),
+        ] {
+            let mut runtime = Runtime::new(rocket_compiled().bundle);
+            advance_to_armed(&mut runtime);
+            let result = tick_rocket_with(
+                &mut runtime,
+                rocket_input("closed", "closed", "safe", None, &[]),
+                BTreeMap::from([(
+                    "telemetry.fuel_pressure".to_owned(),
+                    ScalarValue::Signed(pressure),
+                )]),
+            );
+            assert_eq!(
+                result
+                    .active_rules
+                    .contains(&"launch_pressure_invalid".to_owned()),
+                pressure_invalid,
+                "pressure={pressure}"
+            );
+            assert_eq!(
+                result
+                    .active_rules
+                    .contains(&"critical_pressure".to_owned()),
+                critical,
+                "pressure={pressure}"
+            );
+        }
+
+        let mut stale = Runtime::new(rocket_compiled().bundle);
+        advance_to_armed(&mut stale);
+        let mut result = tick_rocket(
+            &mut stale,
+            rocket_input("closed", "closed", "safe", None, &["fuel_pressure_stale"]),
+        );
+        for _ in 0..3 {
+            result = tick_rocket(
+                &mut stale,
+                rocket_input("closed", "closed", "safe", None, &["fuel_pressure_stale"]),
+            );
+        }
+        assert!(
+            result
+                .active_rules
+                .contains(&"stale_safety_input".to_owned())
+        );
+        assert!(result.hold);
+    }
+
+    #[test]
+    fn rocket_twin_holds_progression_and_resets_only_on_supervised_new_attempt() {
+        let mut runtime = Runtime::new(rocket_compiled().bundle);
+        advance_to_armed(&mut runtime);
+        tick_rocket(
+            &mut runtime,
+            rocket_input("closed", "closed", "safe", Some("armed_hold"), &[]),
+        );
+        assert_eq!(runtime.state().phase, "hold");
+        assert!(runtime.state().hold);
+        tick_rocket(
+            &mut runtime,
+            rocket_input("closed", "closed", "safe", Some("resume_stabilize"), &[]),
+        );
+        assert_eq!(runtime.state().phase, "stabilize");
+        assert!(!runtime.state().hold);
+        tick_rocket(
+            &mut runtime,
+            rocket_input("closed", "closed", "safe", Some("stabilize_abort"), &[]),
+        );
+        assert_eq!(runtime.state().phase, "abort");
+        assert!(runtime.state().abort_latched);
+        tick_rocket(
+            &mut runtime,
+            rocket_input("closed", "closed", "safe", Some("abort_new_attempt"), &[]),
+        );
+        assert_eq!(runtime.state().phase, "idle");
+        assert!(!runtime.state().abort_latched);
+    }
+
+    #[test]
+    fn rocket_twin_repeats_identical_events_and_final_state() {
+        let bundle = rocket_compiled().bundle;
+        let mut left = Runtime::new(bundle.clone());
+        let mut right = Runtime::new(bundle);
+        let inputs = [
+            rocket_input("open", "closed", "safe", Some("start_loading"), &[]),
+            rocket_input("open", "closed", "safe", None, &[]),
+            rocket_input("open", "closed", "safe", None, &["fuel_pressure_drift"]),
+            rocket_input("open", "closed", "safe", None, &[]),
+        ];
+        for input in inputs {
+            assert_eq!(
+                tick_rocket(&mut left, input.clone()),
+                tick_rocket(&mut right, input)
+            );
+            assert_eq!(left.state(), right.state());
+        }
     }
 }

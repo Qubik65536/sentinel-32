@@ -32,6 +32,21 @@ struct TankSecond {
     next_readings: BTreeMap<String, ScalarValue>,
 }
 
+struct RocketRun {
+    steps: u64,
+    cycles: u64,
+    ticks: Vec<RocketTick>,
+    final_phase: String,
+    final_requests: BTreeMap<String, ScalarValue>,
+}
+
+struct RocketTick {
+    result: TickResult,
+    firmware_requests: BTreeMap<String, ScalarValue>,
+    applied_requests: BTreeMap<String, ScalarValue>,
+    transition: Option<String>,
+}
+
 fn parse_word(value: &str) -> Result<u32, String> {
     let (digits, radix) = value
         .strip_prefix("0x")
@@ -165,6 +180,13 @@ fn run() -> Result<(), String> {
                 parse_cycle_budget(cycle_budget)?,
             )
         }
+        [command, scenario, firmware, cycle_budget] if command == "rocket-run" => {
+            run_rocket_firmware(
+                scenario,
+                firmware,
+                parse_cycle_budget(cycle_budget)?,
+            )
+        }
         [command, source, bundle, symbols] if command == "scenario-compile" => {
             let source = read_text(source)?;
             let compilation = compile(&source, AllocationMode::Clean)
@@ -193,10 +215,241 @@ fn run() -> Result<(), String> {
             Ok(())
         }
         _ => Err(
-            "usage: sentinel-app [decode <word> | check <source.asm> | assemble <source.asm> [output.bin] | run <source.asm> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | tank-run <hardware.yaml> <firmware.asm> <cycle-budget> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks>]"
+            "usage: sentinel-app [decode <word> | check <source.asm> | assemble <source.asm> [output.bin] | run <source.asm> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | tank-run <hardware.yaml> <firmware.asm> <cycle-budget> | rocket-run <scenario.yaml> <firmware.asm> <cycle-budget> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks>]"
                 .to_owned(),
         ),
     }
+}
+
+fn run_rocket_firmware(
+    scenario_path: &str,
+    firmware_path: &str,
+    cycle_budget: u64,
+) -> Result<(), String> {
+    let source = read_text(scenario_path)?;
+    let compilation = compile(&source, AllocationMode::Clean).map_err(|error| error.to_string())?;
+    let symbols = compilation
+        .bundle
+        .mmio
+        .iter()
+        .map(|entry| (mmio_symbol(&entry.qualified_id), entry.address))
+        .collect::<BTreeMap<_, _>>();
+    let firmware_source = read_text(firmware_path)?;
+    let assembly = assemble_with_symbols(&firmware_source, 0, &symbols)
+        .map_err(|diagnostics| render_diagnostics(Path::new(firmware_path), &diagnostics))?;
+    if assembly.bytes.is_empty() {
+        return Err("cannot run an empty S32 firmware image".to_owned());
+    }
+
+    println!(
+        "rocket-firmware scenario={} publication={} bundle={} firmware={} start=operator_once cycle_budget={}",
+        compilation.bundle.scenario_id,
+        compilation.bundle.publication,
+        compilation.bundle_hash,
+        firmware_path,
+        cycle_budget
+    );
+    println!(
+        "supervisor-plan start_loading=operator_start arm_launch=simulated_approval begin_terminal_count=simulated_approval"
+    );
+    let run = execute_rocket_firmware(&assembly, compilation.bundle, cycle_budget)?;
+    for tick in &run.ticks {
+        println!(
+            "{} supervisor={} firmware={} applied={}",
+            format_tick_result(&tick.result),
+            tick.transition.as_deref().unwrap_or("none"),
+            format_values(&tick.firmware_requests),
+            format_values(&tick.applied_requests)
+        );
+    }
+    println!(
+        "operation=complete firmware_status=halted firmware_steps={} firmware_cycles={} scenario_ticks={} final_phase={} final_requests={}",
+        run.steps,
+        run.cycles,
+        run.ticks.len(),
+        run.final_phase,
+        format_values(&run.final_requests)
+    );
+    Ok(())
+}
+
+fn execute_rocket_firmware(
+    assembly: &Assembly,
+    bundle: CompiledBundle,
+    cycle_budget: u64,
+) -> Result<RocketRun, String> {
+    let mut runtime = Runtime::new(bundle.clone());
+    let mut machine = firmware_machine(assembly, &bundle, &runtime.state().values)?;
+    let mut steps = 0_u64;
+    let mut write_cursor = 0_usize;
+    let mut frame_actions = Vec::new();
+    let mut ticks = Vec::new();
+
+    while machine.status() == &MachineStatus::Running {
+        machine
+            .step(cycle_budget)
+            .map_err(|error| error.to_string())?;
+        steps = steps.saturating_add(1);
+        let Some(write) = machine.memory_writes().get(write_cursor).cloned() else {
+            continue;
+        };
+        write_cursor = write_cursor.saturating_add(1);
+        let Some(entry) = bundle.mmio.iter().find(|entry| {
+            entry.kind == AllocationKind::ActuatorRequest && entry.address == write.address
+        }) else {
+            continue;
+        };
+        let bytes = write
+            .bytes
+            .get(..4)
+            .ok_or_else(|| format!("request write `{}` is not 32 bits", entry.qualified_id))?;
+        let word = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        frame_actions.push((
+            entry.qualified_id.clone(),
+            word_to_scalar(word, &entry.scalar_type, &bundle)?,
+        ));
+        if entry.qualified_id != "actuator.ignition" {
+            continue;
+        }
+        if frame_actions.len() != 6 {
+            return Err(format!(
+                "rocket firmware command frame contains {} writes instead of 6",
+                frame_actions.len()
+            ));
+        }
+
+        let firmware_requests = actuator_requests(&machine, &bundle)?;
+        let transition =
+            rocket_supervisor_transition(runtime.state().phase.as_str(), &firmware_requests)?;
+        let applied_requests = firmware_requests.clone();
+        let channel_updates = runtime
+            .state()
+            .values
+            .iter()
+            .filter(|(reference, _)| reference.starts_with("telemetry."))
+            .map(|(reference, value)| (reference.clone(), value.clone()))
+            .collect();
+        let result = runtime
+            .tick(&TickInput {
+                channel_updates,
+                actuator_requests: applied_requests.clone(),
+                transition: transition.clone(),
+                ..TickInput::default()
+            })
+            .map_err(|error| error.to_string())?;
+        update_machine_devices(&mut machine, &bundle, &runtime.state().values)?;
+        ticks.push(RocketTick {
+            result,
+            firmware_requests,
+            applied_requests,
+            transition,
+        });
+        frame_actions.clear();
+    }
+
+    if machine.status() != &MachineStatus::Halted {
+        return Err(format!("rocket firmware ended with {:?}", machine.status()));
+    }
+    if !frame_actions.is_empty() {
+        return Err("rocket firmware halted with an incomplete command frame".to_owned());
+    }
+    if runtime.state().phase != "complete" {
+        return Err(format!(
+            "rocket firmware halted before scenario completion in phase `{}`",
+            runtime.state().phase
+        ));
+    }
+    Ok(RocketRun {
+        steps,
+        cycles: machine.cycles(),
+        ticks,
+        final_phase: runtime.state().phase.clone(),
+        final_requests: actuator_requests(&machine, &bundle)?,
+    })
+}
+
+fn rocket_supervisor_transition(
+    phase: &str,
+    requests: &BTreeMap<String, ScalarValue>,
+) -> Result<Option<String>, String> {
+    let ignition = requests
+        .get("actuator.ignition")
+        .ok_or_else(|| "rocket firmware did not write `actuator.ignition`".to_owned())?;
+    Ok(match (phase, ignition) {
+        ("idle", _) => Some("start_loading".to_owned()),
+        ("stabilize", ScalarValue::Enum(value)) if value == "armed" => {
+            Some("arm_launch".to_owned())
+        }
+        ("armed", ScalarValue::Enum(value)) if value == "armed" => {
+            Some("begin_terminal_count".to_owned())
+        }
+        _ => None,
+    })
+}
+
+fn firmware_machine(
+    assembly: &Assembly,
+    bundle: &CompiledBundle,
+    values: &BTreeMap<String, ScalarValue>,
+) -> Result<Machine, String> {
+    let mut slots = vec![
+        MemorySlot::new(
+            assembly.origin,
+            assembly.bytes.clone(),
+            Permissions::READ_EXECUTE,
+        )
+        .map_err(|error| error.to_string())?,
+        MemorySlot::new(
+            LAB_STACK_BASE,
+            vec![0; LAB_STACK_SIZE],
+            Permissions::READ_WRITE,
+        )
+        .map_err(|error| error.to_string())?,
+    ];
+    let mut capabilities = vec![Capability {
+        base: LAB_STACK_BASE,
+        length: LAB_STACK_SIZE as u32,
+        read: true,
+        write: true,
+    }];
+    for entry in &bundle.mmio {
+        let value = values
+            .get(&entry.qualified_id)
+            .ok_or_else(|| format!("scenario value `{}` is missing", entry.qualified_id))?;
+        let permissions = match entry.kind {
+            AllocationKind::ActuatorRequest => Permissions::WRITE,
+            AllocationKind::Telemetry | AllocationKind::Feedback | AllocationKind::Supervisor => {
+                Permissions::READ
+            }
+        };
+        slots.push(
+            MemorySlot::new(
+                entry.address,
+                scalar_to_word(value, &entry.scalar_type, bundle)
+                    .map_err(|error| format!("{}: {error}", entry.qualified_id))?
+                    .to_le_bytes()
+                    .to_vec(),
+                permissions,
+            )
+            .map_err(|error| error.to_string())?,
+        );
+        capabilities.push(Capability {
+            base: entry.address,
+            length: 4,
+            read: permissions.read,
+            write: permissions.write,
+        });
+    }
+    Machine::new(
+        ImageManifest {
+            entry_point: assembly.entry.unwrap_or(assembly.origin),
+            stack_low: LAB_STACK_BASE,
+            stack_high: LAB_STACK_BASE + LAB_STACK_SIZE as u32,
+            capabilities,
+        },
+        slots,
+    )
+    .map_err(|error| error.to_string())
 }
 
 fn format_tick_result(result: &TickResult) -> String {
@@ -550,7 +803,12 @@ fn scalar_to_word(
     match (scalar_type, value) {
         ("bool", ScalarValue::Bool(value)) => Ok(u32::from(*value)),
         ("i32", ScalarValue::Signed(value)) => Ok(*value as u32),
+        ("i32", ScalarValue::Unsigned(value)) => i32::try_from(*value)
+            .map(|value| value as u32)
+            .map_err(|_| format!("value does not fit scalar type `{scalar_type}`")),
         ("u32", ScalarValue::Unsigned(value)) => Ok(*value),
+        ("u32", ScalarValue::Signed(value)) => u32::try_from(*value)
+            .map_err(|_| format!("value does not fit scalar type `{scalar_type}`")),
         (enum_id, ScalarValue::Enum(value)) => bundle
             .types
             .get(enum_id)
@@ -727,14 +985,17 @@ mod tests {
     use std::collections::BTreeMap;
 
     use sentinel_core::assembler::assemble_with_symbols;
-    use sentinel_scenario::{Runtime, ScalarValue, compile_hardware};
+    use sentinel_scenario::{AllocationMode, Runtime, ScalarValue, compile, compile_hardware};
 
     use super::{
-        execute_firmware_tick, mmio_symbol, parse_cycle_budget, parse_tick_count, parse_word,
+        execute_firmware_tick, execute_rocket_firmware, mmio_symbol, parse_cycle_budget,
+        parse_tick_count, parse_word,
     };
 
     const SCENARIO: &str = include_str!("../../../examples/lab-scenario.yaml");
     const FIRMWARE: &str = include_str!("../../../examples/valve-controller.asm");
+    const ROCKET_SCENARIO: &str = include_str!("../../../examples/rocket-launch-default.yaml");
+    const ROCKET_FIRMWARE: &str = include_str!("../../../examples/rocket-controller.asm");
 
     #[test]
     fn parses_decimal_and_hex_words() {
@@ -828,6 +1089,60 @@ mod tests {
                 .next_readings
                 .get("telemetry.tank_pressure"),
             Some(&ScalarValue::Signed(0))
+        );
+    }
+
+    #[test]
+    fn persistent_firmware_controls_the_nominal_rocket_sequence() {
+        let compilation = compile(ROCKET_SCENARIO, AllocationMode::Clean)
+            .unwrap_or_else(|error| panic!("{error}"));
+        let symbols = compilation
+            .bundle
+            .mmio
+            .iter()
+            .map(|entry| (mmio_symbol(&entry.qualified_id), entry.address))
+            .collect::<BTreeMap<_, _>>();
+        let assembly = assemble_with_symbols(ROCKET_FIRMWARE, 0, &symbols)
+            .unwrap_or_else(|diagnostics| panic!("{diagnostics:?}"));
+        let run = execute_rocket_firmware(&assembly, compilation.bundle, 5_000)
+            .unwrap_or_else(|error| panic!("{error}"));
+
+        assert_eq!(run.final_phase, "complete");
+        assert_eq!(run.ticks.len(), 19);
+        assert!(
+            run.ticks
+                .iter()
+                .any(|tick| tick.result.phase_after == "loading")
+        );
+        assert!(
+            run.ticks
+                .iter()
+                .any(|tick| tick.result.phase_after == "terminal_count")
+        );
+        assert!(
+            run.ticks
+                .iter()
+                .any(|tick| tick.result.phase_after == "ignition")
+        );
+        let final_tick = run.ticks.last().expect("rocket run must have ticks");
+        assert_eq!(final_tick.result.phase_after, "complete");
+        assert!(!final_tick.result.hold);
+        assert!(final_tick.result.active_rules.is_empty());
+        for actuator in [
+            "actuator.fuel_fill_valve",
+            "actuator.oxidizer_fill_valve",
+            "actuator.fuel_main_valve",
+            "actuator.oxidizer_main_valve",
+            "actuator.vent_valve",
+        ] {
+            assert_eq!(
+                run.final_requests.get(actuator),
+                Some(&ScalarValue::Enum("closed".to_owned()))
+            );
+        }
+        assert_eq!(
+            run.final_requests.get("actuator.ignition"),
+            Some(&ScalarValue::Enum("safe".to_owned()))
         );
     }
 }

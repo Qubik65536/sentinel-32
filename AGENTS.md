@@ -55,6 +55,7 @@ Keep dependencies conservative. Every dependency must pass the host lane; target
 - Safety claims and limits: `docs/safety-model.md`
 - Threats and trust boundaries: `docs/threat-model.md`
 - Validation method: `docs/validation.md`
+- Advisory AI data contract: `docs/advisory-ai.md`
 - Historical decisions: `docs/decisions/`
 - Dependency-aware work: `.agent/plan.md`
 - Current repository navigation: `.agent/context.md`

@@ -154,6 +154,16 @@ that every reachable nonterminal phase has a timeout or a completion path.
 `on_timeout` is one of `hold`, `abort`, or a named supervisor-only transition.
 Timeout zero means no timeout and is permitted only for terminal phases.
 
+At runtime, rules are evaluated against the current phase after channel and
+fault updates and before automatic progression. A current hold or abort result
+prevents an automatic transition on that tick. A requested `hold` transition
+sets hold while entering its target; a requested `abort` transition latches
+abort while entering its target. A valid supervisor `new_attempt` transition
+clears the hold and abort latch, delayed-feedback queues, and one-shot-fault
+history. It preserves physical channel and actuator values, which must return
+to their declared initial or safe values through explicit supervisor actions
+and deterministic dynamics.
+
 ## Rules and deterministic responses
 
 Each rule has an ID, `condition`, `scope`, `severity`, `response`, and bounded

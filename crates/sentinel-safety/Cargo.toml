@@ -1,0 +1,16 @@
+[package]
+name = "sentinel-safety"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+sentinel-scenario = { path = "../sentinel-scenario" }
+
+[dev-dependencies]
+sentinel-ai-check = { path = "../sentinel-ai-check" }
+serde_json = "1"
+
+[lints]
+workspace = true

@@ -3,8 +3,9 @@
 ## Status
 
 This document records the version-0 boundaries. `sentinel-core`,
-`sentinel-scenario`, and `sentinel-app` now exist; the remaining crates are
-introduced only with functional content and their corresponding tasks.
+`sentinel-scenario`, `sentinel-safety`, `sentinel-ai-check`, and `sentinel-app`
+now exist; remaining crates are introduced only with functional content and
+their corresponding tasks.
 
 ## Trust and data flow
 
@@ -42,12 +43,17 @@ AI findings, user input, scenario source, firmware source, and the network are o
 | `sentinel-ai-check` | Snapshot/rule/finding types, fixtures, test-only OpenAI adapter, local `llama.cpp` adapter, evaluation metadata | Advisory only; no firmware generation, activation, policy, or output-control path |
 | `sentinel-app` | Process entry points, orchestration, NDJSON, dashboard and Studio | UI failure cannot affect essential control |
 
-`sentinel-core`, `sentinel-scenario`, and `sentinel-app` are implemented
-workspace members and pass the QNX cross-build. The core contains ISA types,
-canonical decode/encode, source assembly, sparse memory and manifest types, and
-the reference interpreter. The scenario crate contains bounded source parsing,
-typed validation, canonical compilation, stable MMIO allocation, and the
-generic deterministic runtime. The other rows remain planned boundaries.
+`sentinel-core`, `sentinel-scenario`, `sentinel-safety`, `sentinel-ai-check`,
+and `sentinel-app` are implemented workspace members. The core contains ISA
+types, canonical decode/encode, source assembly, sparse memory and manifest
+types, and the reference interpreter. The scenario crate contains bounded
+source parsing, typed validation, canonical compilation, stable MMIO
+allocation, and the generic deterministic runtime. `sentinel-safety`
+implements typed output decisions, safe-state precedence, abort and authority
+containment, and the armed replacement check. `sentinel-ai-check` implements
+the bounded snapshot, written-rule, finding, provenance, hash, and
+response-validation contract. Current QNX cross-build results are recorded in
+`docs/development.md`; the other rows remain planned boundaries.
 
 ## Runtime separation
 
@@ -79,7 +85,13 @@ supplies read-only telemetry/feedback slots and write-only actuator-request
 slots to the `tank-run` lab harness. Its hardware YAML declares only
 register existence, types, and reset values. Firmware receives the addresses
 compiled from that inventory, and the assembly owns the demonstrated action
-sequence. The manifest grants exactly those MMIO capabilities.
+sequence. The `rocket-run` harness applies the same persistent-machine boundary
+to the full default scenario: compiled symbols provide read-only telemetry and
+feedback plus write-only ordinary actuator requests, while
+`rocket-controller.asm` owns its thresholds, waits, interlock reads, sequencing,
+and command loop. The harness records operator start and simulated supervisor
+approvals separately because ordinary firmware cannot grant them. The manifest
+grants exactly those MMIO capabilities.
 
 Hardware-manifest YAML must remain inventory-only. Pressure targets, duration
 counters, branches, loops, operating phases, and valve commands are firmware
@@ -91,10 +103,11 @@ The scenario compiler owns typed channels, phases, transitions, rules,
 safe-state declarations, dynamics, faults, stable MMIO allocation, generated
 symbols, canonical serialization, and hashing. Runtime code consumes a compiled
 immutable bundle and deterministically updates channels, faults, phases, and
-rule observations. It reports hold and abort state but does not gate actuator
-outputs; deterministic policy evaluation and output gating belong to
-`sentinel-safety` under `SAFE-001`. Publication and firmware activation are
-forbidden while the simulation is armed.
+rule observations. It reports hold and abort state. `sentinel-safety`
+independently consumes those typed results, validates requests, applies
+safe-state precedence, and emits accepted, overridden, or rejected output
+decisions. Publication and firmware activation are forbidden while the
+simulation is armed.
 
 ## Lifecycle boundary
 

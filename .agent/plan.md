@@ -121,32 +121,57 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
   one persistent firmware invocation owns a pressure-controlled fill,
   ten-second hold, unload, and stop sequence. The runner changes physical
   telemetry between request pairs without restarting firmware and records every
-  typed actuator write and instrument change. Host validation passes; the latest QNX
-  link attempt was blocked by a local QNX license-lock timeout. Formal
+  typed actuator write and instrument change. Runtime rules now block automatic
+  progression in the same tick, abort-trigger transitions latch abort, dropped
+  or frozen inputs age instead of refreshing, and supervised new attempts clear
+  attempt-scoped runtime state. Host validation passes; the latest QNX link
+  attempt was blocked by a local QNX license-lock timeout. Formal
   completion waits on `BOOT-002` and human review
   of the concrete v0 source forms and source-provenance clarification recorded
   in `docs/scenario-schema.md`.
 
 ### SCEN-003 — Implement default rocket launch scenario
 
-- **Category / status:** scenario / planned
+- **Category / status:** scenario / blocked
 - **Dependencies:** SCEN-002
 - **Description:** Express the launch system entirely through the schema.
 - **Acceptance:** Scenario includes both pressure channels, valve commands/feedback/timeouts, electrical sources, ignition continuity/arm/feedback, flight readiness, clearance/inhibits, sequence timer, phases/transitions, interlocks, latches, safe states, dynamics, and named faults; no rocket identifiers enter generic engine code; compilation and golden symbol/hash tests pass.
+- **Progress:** Functional acceptance is implemented in
+  `examples/rocket-launch-default.yaml`. It compiles to 23 deterministic MMIO
+  slots and golden bundle hash
+  `72975636c2b7c0db7931bc09defcd3ce27adc3ab98f76fa4d908128f94c25388`.
+  `examples/rocket-controller.asm` and the `rocket-run` command execute the
+  nominal sequence as one persistent S32 invocation; assembly owns operational
+  thresholds, waits, interlock checks, actuator requests, ignition feedback,
+  shutdown, and abort commands while the runner records simulated supervisor
+  approvals.
+  Formal completion waits on `SCEN-002`.
 
 ### TWIN-001 — Validate rocket launch-pad state model
 
-- **Category / status:** digital twin / planned
+- **Category / status:** digital twin / blocked
 - **Dependencies:** SCEN-003
 - **Description:** Exercise the generic runtime as the deterministic launch-pad twin.
 - **Acceptance:** Tests cover normal loading through completion; pressure drift/steps/over- and underpressure/staleness; valve delays/stuck feedback; bus loss; continuity/readiness/clearance loss; async hold/abort; countdown timing; abort irreversibility and supervised new attempt; repeated inputs yield identical traces.
+- **Progress:** Host integration tests cover the listed normal, boundary,
+  fault, timing, hold, abort, reset, and determinism cases. Generic runtime
+  semantics now apply rule holds before automatic progression, latch requested
+  abort transitions, and clear only attempt-scoped state on a supervised new
+  attempt. Formal completion waits on `SCEN-003`.
 
 ### SAFE-001 — Implement invariant evaluation and safe-state output
 
-- **Category / status:** safety / planned
+- **Category / status:** safety / blocked
 - **Dependencies:** VM-001, SCEN-002, TWIN-001
 - **Description:** Evaluate typed policy independently of firmware and gate every actuator request.
 - **Acceptance:** At least the eight policy families in `docs/safety-model.md` have boundary truth tables; deterministic precedence resolves global, latch, hazard, phase, and default policy; conflicts/missing coverage cannot publish; ordinary firmware cannot clear overrides; every output is accepted, overridden, or rejected with a stable reason; host and QNX checks pass with human review.
+- **Progress:** `sentinel-safety` implements typed accepted, overridden, and
+  rejected decisions; request validation; compiled-rule response handling;
+  global/latch/hazard/phase/default precedence; bounded preservation; abort and
+  authority containment; stable reason codes; and armed replacement denial.
+  Host truth tables cover all eight policy families and advisory isolation.
+  Formal completion waits on its blocked dependencies, a successful current
+  QNX link, and human review of this trusted safety behavior.
 
 ### SAFE-002 — Implement manifest and static validation
 
@@ -180,10 +205,16 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 
 ### AI-001 — Specify the advisory rule-check contract
 
-- **Category / status:** AI / planned
+- **Category / status:** AI / blocked
 - **Dependencies:** SCOPE-001, SCEN-001, BOOT-002
 - **Description:** Define provider-neutral, bounded types that compare one identified current-state snapshot with one versioned written rule set and return advisory findings.
 - **Acceptance:** Input includes snapshot schema/version/hash, scenario identity/hash, observation time or tick, typed state fields, and rule-set version/hash; output is closed-schema and includes only valid rule IDs, `possible_violation`/`no_issue_observed`/`unknown`, cited state fields, bounded rationale, and provenance; missing or stale data can only yield `unknown` or a rejected response; the protocol exposes no firmware source, tool use, approval, policy mutation, activation, alarm suppression, or output-control capability; limits and typed timeout/refusal/transport/schema errors are defined; fixtures cover nominal, violation, insufficient-data, stale-hash, malformed, oversized, and injection cases.
+- **Progress:** `sentinel-ai-check` and `docs/advisory-ai.md` implement the
+  provider-neutral bounded snapshot, written-rule, finding, provenance, hash,
+  limits, and error contract. Fixtures cover nominal, violation, unknown,
+  stale/cross-paired hashes, malformed/oversized data, invented identifiers,
+  invalid citations, and injection-shaped text. Production dependencies expose
+  no control or safety authority. Formal completion waits on `BOOT-002`.
 
 ### AI-002 — Implement and evaluate the OpenAI test backend
 
@@ -287,12 +318,13 @@ AI-004 + DOC-001 + UI-003 + TEST-001 -> DOC-002
 
 The implemented `ISA-002`, `VM-001`, and `SCEN-002` work remains formally
 blocked on `BOOT-002` while target evidence for `BUILD-001` is captured.
-`SCEN-002` also awaits human review of its schema clarification. The next
-functional scenario batch is `SCEN-003`.
+`SCEN-002` also awaits human review of its schema clarification. The
+`SCEN-003`/`TWIN-001`/`SAFE-001`/`AI-001` host functionality is implemented but
+retains the dependency and review blockers recorded on those tasks. The next
+unimplemented critical-path work is `SAFE-002` or `VM-002`.
 
 ## Open project questions
 
 - How will this environment transfer to and execute commands on the QNX Raspberry Pi 5, and which target image/version is authoritative?
 - Which GGUF model, quantization, license, and SHA-256 will be pinned after `AI-003` measures compatibility and resource use?
-- Which written rule authoring format and rule-to-compiled-invariant traceability fields will `AI-001` select?
 - Which OpenAI test model will be pinned after current structured-output support is verified during `AI-002`?
