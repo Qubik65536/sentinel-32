@@ -364,6 +364,13 @@ The procedure is:
 6. Assembly commands all valves closed and ignition safe for two frames, waits
    for the one-tick feedback delay to settle, and halts.
 
+Each `tick=` line includes `asm_first_pc`, `asm_last_pc`, `asm_steps`, and
+`asm_cycles` for the S32 instructions that produced that six-write actuator
+command frame. Nonempty `active_rules`, `hold=true`, or `abort_latched=true`
+identify a deterministic scenario issue and its containment response. These
+virtual-cycle counts are deterministic accounting, not measured execution time
+or WCET.
+
 The run must begin with `rocket-firmware scenario=rocket_launch_default`, the
 same bundle hash, `start=operator_once`, and `cycle_budget=5000`. Its final line
 must report:

@@ -92,6 +92,9 @@ approvals, terminal count, ignition feedback, completion, and confirmed
 closed/safe shutdown. The observed host run uses 19 scenario ticks, 248
 instructions, and 391 virtual cycles. These bounded observed counts are
 regression evidence, not WCET.
+Each of the 19 command frames records a nonzero assembly instruction and
+virtual-cycle count plus aligned first/last PCs, allowing an operator to
+correlate firmware execution with triggered rules and hold/abort state.
 
 The host `run examples/countdown.asm 9` case halts after nine steps and cycles
 with `PC=0x00000014` and `R1=0`. Budget 8 is rejected before `HALT` with exit

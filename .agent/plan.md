@@ -246,6 +246,12 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 - **Dependencies:** VM-002, TWIN-001, SAFE-001
 - **Description:** Provide the authoritative headless event/state interface.
 - **Acceptance:** Versioned bounded records expose source/instruction, registers, memory/output changes, scenario state, policy results, cycles, faults, and evidence references; slow/disconnected consumers cannot delay control; malformed requests cannot mutate authority; deterministic fixtures are documented.
+- **Progress:** The human-readable `rocket-run` output correlates every
+  completed assembly command frame with its first/last PCs, instruction and
+  virtual cycle counts, scenario phase transition, active rules/faults, hold
+  and abort state, supervisor event, firmware requests, and applied requests.
+  Versioned NDJSON, register deltas, replay binding, and nonblocking transport
+  remain.
 
 ### UI-002 — Implement browser operations dashboard
 

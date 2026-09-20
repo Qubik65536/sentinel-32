@@ -90,6 +90,10 @@ Current requirements give AI one advisory function: compare a bounded current-st
 - `examples/rocket-controller.asm`: persistent S32 controller for the nominal
   normalized rocket run; firmware owns thresholds, waits, interlock checks,
   actuator sequencing, ignition feedback, shutdown, and its abort path.
+- `rocket-run` prints each completed six-write command frame with its first and
+  last assembly PCs, instruction count, virtual-cycle count, scenario
+  transition, active deterministic rules, hold/abort state, requested outputs,
+  and applied outputs.
 - `docs/safety-model.md`: claims, invariant families, containment, evidence.
 - `docs/threat-model.md`: assets, untrusted boundaries, abuse cases, controls.
 - `docs/validation.md`: validation layers and current results.

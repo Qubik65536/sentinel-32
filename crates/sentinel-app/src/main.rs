@@ -56,6 +56,10 @@ struct RocketTick {
     firmware_requests: BTreeMap<String, ScalarValue>,
     applied_requests: BTreeMap<String, ScalarValue>,
     transition: Option<String>,
+    frame_first_pc: u32,
+    frame_last_pc: u32,
+    frame_steps: u64,
+    frame_cycles: u64,
 }
 
 fn parse_word(value: &str) -> Result<u32, String> {
@@ -526,8 +530,12 @@ fn run_rocket_firmware(
     let run = execute_rocket_firmware(&assembly, compilation.bundle, cycle_budget)?;
     for tick in &run.ticks {
         println!(
-            "{} supervisor={} firmware={} applied={}",
+            "{} asm_first_pc=0x{:08X} asm_last_pc=0x{:08X} asm_steps={} asm_cycles={} supervisor={} firmware={} applied={}",
             format_tick_result(&tick.result),
+            tick.frame_first_pc,
+            tick.frame_last_pc,
+            tick.frame_steps,
+            tick.frame_cycles,
             tick.transition.as_deref().unwrap_or("none"),
             format_values(&tick.firmware_requests),
             format_values(&tick.applied_requests)
@@ -555,12 +563,18 @@ fn execute_rocket_firmware(
     let mut write_cursor = 0_usize;
     let mut frame_actions = Vec::new();
     let mut ticks = Vec::new();
+    let mut frame_first_pc = None;
+    let mut frame_steps = 0_u64;
+    let mut frame_cycles = 0_u64;
 
     while machine.status() == &MachineStatus::Running {
-        machine
+        let step = machine
             .step(cycle_budget)
             .map_err(|error| error.to_string())?;
         steps = steps.saturating_add(1);
+        frame_first_pc.get_or_insert(step.pc);
+        frame_steps = frame_steps.saturating_add(1);
+        frame_cycles = frame_cycles.saturating_add(u64::from(step.cycles_charged));
         let Some(write) = machine.memory_writes().get(write_cursor).cloned() else {
             continue;
         };
@@ -614,8 +628,16 @@ fn execute_rocket_firmware(
             firmware_requests,
             applied_requests,
             transition,
+            frame_first_pc: frame_first_pc
+                .ok_or_else(|| "rocket command frame has no instructions".to_owned())?,
+            frame_last_pc: step.pc,
+            frame_steps,
+            frame_cycles,
         });
         frame_actions.clear();
+        frame_first_pc = None;
+        frame_steps = 0;
+        frame_cycles = 0;
     }
 
     if machine.status() != &MachineStatus::Halted {
@@ -1419,6 +1441,13 @@ mod tests {
 
         assert_eq!(run.final_phase, "complete");
         assert_eq!(run.ticks.len(), 19);
+        assert!(run.ticks.iter().all(|tick| tick.frame_steps > 0));
+        assert!(run.ticks.iter().all(|tick| tick.frame_cycles > 0));
+        assert!(
+            run.ticks
+                .iter()
+                .all(|tick| tick.frame_first_pc % 4 == 0 && tick.frame_last_pc % 4 == 0)
+        );
         assert!(
             run.ticks
                 .iter()
