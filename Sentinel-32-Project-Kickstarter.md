@@ -768,9 +768,9 @@ Every dependency must build in the host-native lane. Target-facing dependencies 
 │   ├── app.js
 │   └── style.css
 ├── examples/
-│   ├── safe-launch-sequence.s32
-│   ├── unsafe-ignition-bypass.s32
-│   ├── cryogenic-pressure-hold.s32
+│   ├── safe-launch-sequence.asm
+│   ├── unsafe-ignition-bypass.asm
+│   ├── cryogenic-pressure-hold.asm
 │   └── scenarios/
 │       └── rocket-launch-default.yaml
 ├── fixtures/

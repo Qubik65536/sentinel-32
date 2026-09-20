@@ -1,4 +1,4 @@
-# Hardware inventory for the tank controller in valve-controller.s32.
+# Hardware inventory for the tank controller in valve-controller.asm.
 #
 # This file only declares hardware existence, register types, ranges, and reset
 # values. It does not contain the pressure target, ten-second hold requirement,

@@ -35,4 +35,4 @@ second while that invocation remains active. An open inlet raises pressure by
 10000 milli-units, an open outlet lowers it by 10000, and closed valves retain
 pressure. These are simulated physical responses, not controller actions. The
 pressure target, ten-second counter, sequencing, and every inlet/outlet request
-remain in `examples/valve-controller.s32`.
+remain in `examples/valve-controller.asm`.

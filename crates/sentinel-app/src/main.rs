@@ -193,7 +193,7 @@ fn run() -> Result<(), String> {
             Ok(())
         }
         _ => Err(
-            "usage: sentinel-app [decode <word> | check <source.s32> | assemble <source.s32> [output.bin] | run <source.s32> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | tank-run <hardware.yaml> <firmware.s32> <cycle-budget> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks>]"
+            "usage: sentinel-app [decode <word> | check <source.asm> | assemble <source.asm> [output.bin] | run <source.asm> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | tank-run <hardware.yaml> <firmware.asm> <cycle-budget> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks>]"
                 .to_owned(),
         ),
     }
@@ -734,7 +734,7 @@ mod tests {
     };
 
     const SCENARIO: &str = include_str!("../../../examples/lab-scenario.yaml");
-    const FIRMWARE: &str = include_str!("../../../examples/valve-controller.s32");
+    const FIRMWARE: &str = include_str!("../../../examples/valve-controller.asm");
 
     #[test]
     fn parses_decimal_and_hex_words() {

@@ -26,9 +26,9 @@ mkdir -p \
   "$STAGING_TREE/artifacts"
 
 cp "$APP" "$STAGING_TREE/release/sentinel-app"
-cp "$PROJECT_ROOT/examples/countdown.s32" "$STAGING_TREE/examples/countdown.s32"
-cp "$PROJECT_ROOT/examples/valve-controller.s32" \
-  "$STAGING_TREE/examples/valve-controller.s32"
+cp "$PROJECT_ROOT/examples/countdown.asm" "$STAGING_TREE/examples/countdown.asm"
+cp "$PROJECT_ROOT/examples/valve-controller.asm" \
+  "$STAGING_TREE/examples/valve-controller.asm"
 cp "$PROJECT_ROOT/examples/lab-scenario.yaml" \
   "$STAGING_TREE/examples/lab-scenario.yaml"
 cp "$PROJECT_ROOT/Cargo.lock" "$STAGING_TREE/artifacts/Cargo.lock"

@@ -6,10 +6,10 @@
 # it never restarts this program or chooses the next controller state.
 #
 # Complete assembly-owned sequence:
-#   1. Keep inlet OPEN and outlet CLOSED until pressure reaches 50.000.
-#   2. Keep both valves CLOSED for exactly 10 simulated seconds.
-#   3. Keep inlet CLOSED and outlet OPEN until pressure reaches zero.
-#   4. Close both valves and HALT.
+#   1. Keep inlet open and outlet closed until pressure reaches 50.000.
+#   2. Keep both valves closed for exactly 10 simulated seconds.
+#   3. Keep inlet closed and outlet open until pressure reaches zero.
+#   4. Close both valves and halt.
 #
 # YAML-generated MMIO symbols:
 #   S32_TELEMETRY_TANK_PRESSURE  current tank pressure, read-only
@@ -19,73 +19,73 @@
 # Valve values come from YAML enum order: closed=0 and open=1.
 # Pressure uses integer milli-units, so 50000 means 50.000 pressure units.
 # Each completed pair of valve writes represents one simulated second of tank
-# response. The ten-second counter is R8, entirely inside this firmware.
+# response. The ten-second counter is r8, entirely inside this firmware.
 #
 # Registers:
-#   R1  = current pressure
-#   R3  = pressure target 50000
-#   R4  = comparison result
-#   R5  = inlet request
-#   R6  = outlet request
-#   R8  = remaining hold seconds
-#   R10 = pressure-register address
-#   R12 = inlet-request address
-#   R13 = outlet-request address
+#   r1  = current pressure
+#   r3  = pressure target 50000
+#   r4  = comparison result
+#   r5  = inlet request
+#   r6  = outlet request
+#   r8  = remaining hold seconds
+#   r10 = pressure-register address
+#   r12 = inlet-request address
+#   r13 = outlet-request address
 
 .entry start
 
 start:
     # Resolve hardware addresses once when the operator starts the program.
-    LA   R10, S32_TELEMETRY_TANK_PRESSURE
-    LA   R12, S32_ACTUATOR_INLET_VALVE
-    LA   R13, S32_ACTUATOR_OUTLET_VALVE
-    LI   R3, 50000
+    la    r10, S32_TELEMETRY_TANK_PRESSURE
+    la    r12, S32_ACTUATOR_INLET_VALVE
+    la    r13, S32_ACTUATOR_OUTLET_VALVE
+    li    r3, 50000
 
 load:
     # Re-read the live pressure after every simulated second. Continue filling
     # while pressure is below the firmware-owned 50.000 target.
-    LW   R1, 0(R10)
-    SLT  R4, R1, R3
-    BEQ  R4, R0, begin_hold
+    lw    r1, 0(r10)
+    slt   r4, r1, r3
+    beq   r4, r0, begin_hold
 
-    LI   R5, 1
-    LI   R6, 0
-    SW   R5, 0(R12)
-    SW   R6, 0(R13)
-    B    load
+    li    r5, 1
+    li    r6, 0
+    sw    r5, 0(r12)
+    sw    r6, 0(r13)
+    b     load
 
 begin_hold:
-    # The target has been reached. R8 belongs to this still-running program and
+    # The target has been reached. r8 belongs to this still-running program and
     # counts the ten requested hold seconds; YAML contains no hold instruction.
-    LI   R8, 10
+    li    r8, 10
 
 hold:
     # One closed/closed command pair represents one simulated hold second.
-    LI   R5, 0
-    LI   R6, 0
-    SW   R5, 0(R12)
-    SW   R6, 0(R13)
-    ADDIU R8, R8, -1
-    BNE  R8, R0, hold
+    li    r5, 0
+    li    r6, 0
+    sw    r5, 0(r12)
+    sw    r6, 0(r13)
+    addiu r8, r8, -1
+    bne   r8, r0, hold
 
 unload:
     # Poll pressure after every outlet-flow second. Continue unloading while
     # pressure is greater than zero.
-    LW   R1, 0(R10)
-    SLTI R4, R1, 1
-    BNE  R4, R0, stopped
+    lw    r1, 0(r10)
+    slti  r4, r1, 1
+    bne   r4, r0, stopped
 
-    LI   R5, 0
-    LI   R6, 1
-    SW   R5, 0(R12)
-    SW   R6, 0(R13)
-    B    unload
+    li    r5, 0
+    li    r6, 1
+    sw    r5, 0(r12)
+    sw    r6, 0(r13)
+    b     unload
 
 stopped:
     # The complete operation is finished. Leave both valves closed, then halt
     # this one operator-triggered execution.
-    LI   R5, 0
-    LI   R6, 0
-    SW   R5, 0(R12)
-    SW   R6, 0(R13)
-    HALT
+    li    r5, 0
+    li    r6, 0
+    sw    r5, 0(r12)
+    sw    r6, 0(r13)
+    halt

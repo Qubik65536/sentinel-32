@@ -65,7 +65,7 @@ one-shot faults, priority, deterministic phase progression, and firmware access
 to hardware-only YAML-allocated MMIO. The integration test observes the two
 assembly-issued actuator requests in order and verifies the final request.
 
-The host `run examples/countdown.s32 9` case halts after nine steps and cycles
+The host `run examples/countdown.asm 9` case halts after nine steps and cycles
 with `PC=0x00000014` and `R1=0`. Budget 8 is rejected before `HALT` with exit
 code 2. A prior clean QNX SDP 8.0 Build 14 workspace release cross-build for
 `aarch64-unknown-nto-qnx800` produced an AArch64 QNX PIE with SHA-256

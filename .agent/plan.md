@@ -66,6 +66,14 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
   covered by host tests and the QNX cross-build. Formal completion waits on its
   `BOOT-002` dependency.
 
+### ISA-003 — Standardize assembly source presentation
+
+- **Category / status:** ISA / complete (2026-09-19)
+- **Dependencies:** ISA-001
+- **Description:** Present S32 source in a consistent lowercase MIPS style, use the `.asm` file extension, and use the Markdown `asm` language fence for assembly examples.
+- **Acceptance:** Checked-in assembly examples use the `.asm` extension, lowercase mnemonics and registers, and conventional operand spacing; the ISA contract defines the canonical presentation while retaining case-insensitive input compatibility; Markdown assembly is fenced as `asm`; examples still assemble and the host lane passes.
+- **Evidence:** `examples/countdown.asm`, `examples/valve-controller.asm`, and `docs/s32-isa.md`; `cargo fmt --check`, strict workspace Clippy, all 45 workspace tests, the countdown assembler check, and the 203-step tank integration run passed on 2026-09-19.
+
 ### VM-001 — Implement the reference interpreter
 
 - **Category / status:** VM / blocked

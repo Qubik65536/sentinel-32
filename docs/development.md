@@ -178,10 +178,10 @@ Copy both the executable and source fixture to the Pi using the documented
 ```sh
 scp target/qnx800/aarch64-unknown-nto-qnx800/release/sentinel-app \
   qnxuser@qnxpi59.local:/data/home/qnxuser/sentinel-32/release/sentinel-app
-scp examples/countdown.s32 \
-  qnxuser@qnxpi59.local:/data/home/qnxuser/sentinel-32/examples/countdown.s32
-scp examples/valve-controller.s32 \
-  qnxuser@qnxpi59.local:/data/home/qnxuser/sentinel-32/examples/valve-controller.s32
+scp examples/countdown.asm \
+  qnxuser@qnxpi59.local:/data/home/qnxuser/sentinel-32/examples/countdown.asm
+scp examples/valve-controller.asm \
+  qnxuser@qnxpi59.local:/data/home/qnxuser/sentinel-32/examples/valve-controller.asm
 ssh qnxuser@qnxpi59.local
 ```
 
@@ -193,7 +193,7 @@ uname -a
 chmod 755 /data/home/qnxuser/sentinel-32/release/sentinel-app
 /data/home/qnxuser/sentinel-32/release/sentinel-app
 /data/home/qnxuser/sentinel-32/release/sentinel-app run \
-  /data/home/qnxuser/sentinel-32/examples/countdown.s32 9
+  /data/home/qnxuser/sentinel-32/examples/countdown.asm 9
 echo $?
 ```
 
@@ -210,7 +210,7 @@ ninth instruction:
 
 ```sh
 /data/home/qnxuser/sentinel-32/release/sentinel-app run \
-  /data/home/qnxuser/sentinel-32/examples/countdown.s32 8
+  /data/home/qnxuser/sentinel-32/examples/countdown.asm 8
 echo $?
 ```
 
@@ -248,7 +248,7 @@ assembly-owned action sequence against those YAML-declared registers:
 ```sh
 /data/home/qnxuser/sentinel-32/release/sentinel-app tank-run \
   /data/home/qnxuser/sentinel-32/examples/lab-scenario.yaml \
-  /data/home/qnxuser/sentinel-32/examples/valve-controller.s32 1000
+  /data/home/qnxuser/sentinel-32/examples/valve-controller.asm 1000
 echo $?
 ```
 
@@ -272,7 +272,7 @@ Also verify fail-closed argument handling:
 ```sh
 /data/home/qnxuser/sentinel-32/release/sentinel-app tank-run \
   /data/home/qnxuser/sentinel-32/examples/lab-scenario.yaml \
-  /data/home/qnxuser/sentinel-32/examples/valve-controller.s32 256
+  /data/home/qnxuser/sentinel-32/examples/valve-controller.asm 256
 echo $?
 ```
 

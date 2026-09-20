@@ -1902,7 +1902,7 @@ mod tests {
 
     #[test]
     fn countdown_program_runs_deterministically_to_halt() {
-        let source = include_str!("../../../examples/countdown.s32");
+        let source = include_str!("../../../examples/countdown.asm");
         let assembly = crate::assembler::assemble(source, 0)
             .unwrap_or_else(|diagnostics| panic!("{diagnostics:?}"));
         let entry = assembly.entry.unwrap_or(assembly.origin);

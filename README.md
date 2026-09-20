@@ -42,16 +42,18 @@ cargo run -p sentinel-app -- decode 0x00221820
 Check, inspect, or emit the included assembly example with:
 
 ```sh
-cargo run -p sentinel-app -- check examples/countdown.s32
-cargo run -p sentinel-app -- assemble examples/countdown.s32
-cargo run -p sentinel-app -- assemble examples/countdown.s32 countdown.bin
-cargo run -p sentinel-app -- run examples/countdown.s32 9
+cargo run -p sentinel-app -- check examples/countdown.asm
+cargo run -p sentinel-app -- assemble examples/countdown.asm
+cargo run -p sentinel-app -- assemble examples/countdown.asm countdown.bin
+cargo run -p sentinel-app -- run examples/countdown.asm 9
 ```
 
-The assembler supports all v0 instructions, labels, comments, `SP`/`FP`/`RA`,
+The assembler supports all v0 instructions, labels, comments, `sp`/`fp`/`ra`,
 decimal/hex/binary literals, checked symbol expressions, `.entry`, `.word`,
-`.zero`, and the canonical `NOP`, `MOVE`, `B`, `RET`, `LI`, and `LA`
-pseudo-instructions.
+`.zero`, and the canonical `nop`, `move`, `b`, `ret`, `li`, and `la`
+pseudo-instructions. Project assembly uses lowercase MIPS-style mnemonics and
+registers, standalone source uses the `.asm` extension, and Markdown source
+examples use fenced `asm` blocks.
 
 The `run` command requires a positive virtual-cycle budget. Its lab manifest
 maps the assembled program read/execute and provides one 64 KiB read/write
@@ -74,7 +76,7 @@ cargo run -p sentinel-app -- hardware-check examples/lab-scenario.yaml
 cargo run -p sentinel-app -- hardware-compile \
   examples/lab-scenario.yaml bundle.json symbols.inc
 cargo run -p sentinel-app -- tank-run \
-  examples/lab-scenario.yaml examples/valve-controller.s32 1000
+  examples/lab-scenario.yaml examples/valve-controller.asm 1000
 ```
 
 The YAML contains hardware existence, value types, and reset values only. The

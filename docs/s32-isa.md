@@ -239,28 +239,48 @@ Expressions are a literal or label with one optional literal addend/subtrahend;
 `hi16(expr)` and `lo16(expr)` select halves. All arithmetic and field fitting is
 checked.
 
+Canonical source presentation follows MIPS-style casing: mnemonics,
+pseudo-instructions, directives, and register names are lowercase, operands are
+separated by a comma and a space, and memory operands have the form
+`offset(base)`. Generated external symbol names retain their declared case.
+Markdown that contains S32 source uses an `asm` fenced code block. Uppercase
+and mixed-case source remains accepted for compatibility because parsing is
+case-insensitive.
+
+```asm
+.entry start
+
+start:
+    li    r1, 3
+
+countdown:
+    addiu r1, r1, -1
+    bne   r1, r0, countdown
+    halt
+```
+
 The assembler receives an aligned origin. Labels are absolute byte addresses.
 Branch labels must produce an aligned signed-16-bit word displacement; J targets
 must share the 256 MiB region selected by `PC+4`. Directives are `.word expr`,
 `.zero count` (nonnegative multiple of four), and one `.entry label`.
 
-Pseudo-instructions expand canonically: `NOP` to `SLL R0,R0,0`; `MOVE rd,rs`
-to `ADDU rd,rs,R0`; `B target` to `BEQ R0,R0,target`; `RET` to `JR RA`; and
-`LI/LA rt,expr` to `LUI rt,hi16(expr)` followed by `ORI rt,rt,lo16(expr)`.
-`LI/LA` always use two words, avoiding layout relaxation. Diagnostics require
-line, column, and a stable actionable code.
+Pseudo-instructions expand canonically: `nop` to `sll r0, r0, 0`;
+`move rd, rs` to `addu rd, rs, r0`; `b target` to `beq r0, r0, target`;
+`ret` to `jr ra`; and `li`/`la rt, expr` to `lui rt, hi16(expr)` followed by
+`ori rt, rt, lo16(expr)`. `li` and `la` always use two words, avoiding layout
+relaxation. Diagnostics require line, column, and a stable actionable code.
 
 Pseudo-instructions have no opcode of their own. The assembler replaces them
 with these real instructions before bytes are emitted:
 
 | Source form | Real encoded instruction(s) | Opcode/function selectors |
 |---|---|---|
-| `NOP` | `SLL R0,R0,0` | opcode `000000`, function `000000` |
-| `MOVE rd,rs` | `ADDU rd,rs,R0` | opcode `000000`, function `100001` |
-| `B target` | `BEQ R0,R0,target` | opcode `000100` |
-| `RET` | `JR R31` | opcode `000000`, function `001000` |
-| `LI rt,expr` | `LUI rt,hi16(expr)`; `ORI rt,rt,lo16(expr)` | opcodes `001111`; `001101` |
-| `LA rt,expr` | same two instructions as `LI` | opcodes `001111`; `001101` |
+| `nop` | `sll r0, r0, 0` | opcode `000000`, function `000000` |
+| `move rd, rs` | `addu rd, rs, r0` | opcode `000000`, function `100001` |
+| `b target` | `beq r0, r0, target` | opcode `000100` |
+| `ret` | `jr r31` | opcode `000000`, function `001000` |
+| `li rt, expr` | `lui rt, hi16(expr)`; `ori rt, rt, lo16(expr)` | opcodes `001111`; `001101` |
+| `la rt, expr` | same two instructions as `li` | opcodes `001111`; `001101` |
 
 Labels, `.entry`, `.word`, and `.zero` are assembler syntax rather than CPU
 instructions. A label binds a source name to the current byte address. `.entry`
@@ -270,34 +290,34 @@ instruction word and therefore have no opcode.
 
 The scenario runner may also supply external symbols generated from validated
 YAML MMIO allocation. For example, `S32_TELEMETRY_COUNTER` resolves to a
-32-bit address before `LA` expands. The symbol is not an instruction and does
+32-bit address before `la` expands. The symbol is not an instruction and does
 not occupy memory by itself.
 
 ### How the included examples map to real instructions
 
-`examples/countdown.s32` uses:
+`examples/countdown.asm` uses:
 
 | Source | What the assembler/CPU uses |
 |---|---|
 | `.entry start` | entry metadata; no instruction |
-| `li r1,3` | `LUI R1,0` then `ORI R1,R1,3` |
-| `addiu r1,r1,-1` | real `ADDIU`, opcode `001001` |
-| `bne r1,r0,countdown` | real `BNE`, opcode `000101`, signed PC-relative displacement |
-| `halt` | real `HALT`, opcode `111110`, remaining 26 bits zero |
+| `li r1, 3` | `lui r1, 0` then `ori r1, r1, 3` |
+| `addiu r1, r1, -1` | real `addiu`, opcode `001001` |
+| `bne r1, r0, countdown` | real `bne`, opcode `000101`, signed PC-relative displacement |
+| `halt` | real `halt`, opcode `111110`, remaining 26 bits zero |
 
-`examples/valve-controller.s32` uses:
+`examples/valve-controller.asm` uses:
 
 | Source | What the assembler/CPU uses |
 |---|---|
-| `LA R1,S32_TELEMETRY_COUNTER` | `LUI` + `ORI` containing the YAML-assigned address |
-| `LW R2,0(R1)` | real `LW`, opcode `100011`; read one MMIO word |
-| `SLTI R3,R2,3` | real `SLTI`, opcode `001010`; set `R3` from the comparison |
-| `BEQ R3,R0,request_closed` | real `BEQ`, opcode `000100` |
-| `LI R4,1` / `LI R4,0` | two real instructions for each `LI` |
-| `B write_request` | `BEQ R0,R0,write_request`, opcode `000100` |
-| `LA R5,S32_ACTUATOR_VALVE` | `LUI` + `ORI` containing the YAML-assigned address |
-| `SW R4,0(R5)` | real `SW`, opcode `101011`; write one MMIO request word |
-| `HALT` | real `HALT`, opcode `111110` |
+| `la r10, S32_TELEMETRY_TANK_PRESSURE` | `lui` + `ori` containing the YAML-assigned address |
+| `lw r1, 0(r10)` | real `lw`, opcode `100011`; read one MMIO word |
+| `slt r4, r1, r3` | real `slt`, function `101010`; set `r4` from the comparison |
+| `beq r4, r0, begin_hold` | real `beq`, opcode `000100` |
+| `li r5, 1` / `li r5, 0` | two real instructions for each `li` |
+| `b load` | `beq r0, r0, load`, opcode `000100` |
+| `la r12, S32_ACTUATOR_INLET_VALVE` | `lui` + `ori` containing the YAML-assigned address |
+| `sw r5, 0(r12)` | real `sw`, opcode `101011`; write one MMIO request word |
+| `halt` | real `halt`, opcode `111110` |
 
 ## Golden vectors
 

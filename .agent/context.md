@@ -1,6 +1,6 @@
 # Repository context
 
-Last updated: 2026-09-19 during `SCEN-002`.
+Last updated: 2026-09-19 during `ISA-003`.
 
 ## Current implementation
 
@@ -21,6 +21,12 @@ firmware harness with YAML-allocated MMIO. `BOOT-002`, `ISA-002`,
 evidence dependency in `BUILD-001`; `SCEN-002` also awaits review of its schema
 clarification.
 
+Canonical S32 source presentation uses lowercase MIPS-style mnemonics,
+directives, and registers with spaced operands. Markdown source examples use
+the `asm` fence, and standalone source files use the `.asm` extension so editors
+can select assembly highlighting. The assembler remains case-insensitive for
+source compatibility.
+
 Current requirements give AI one advisory function: compare a bounded current-state snapshot against versioned written safety rules and emit structured, rule-linked findings. OpenAI is test-only. The hackathon deployment runs the checker client and a pinned local GGUF model served by `llama.cpp` on a companion host, with a loopback-only model endpoint and no remote fallback. AI does not generate firmware or participate in deterministic validation, evidence, activation, safety policy, or output control. This scope is recorded by `SCOPE-001` and `docs/decisions/DEC-011-advisory-ai-checker.md`.
 
 ## Navigation
@@ -38,10 +44,10 @@ Current requirements give AI one advisory function: compare a bounded current-st
 - `crates/sentinel-core`: portable S32 ISA, assembler, VM, memory, traps, cycles, and tests.
 - `crates/sentinel-scenario`: strict parser, compiler, canonical artifacts, MMIO symbols, and deterministic runtime.
 - `crates/sentinel-app`: host/QNX CLI for VM and scenario workflows.
-- `examples/countdown.s32`: source-level assembler smoke example.
+- `examples/countdown.asm`: source-level assembler smoke example.
 - `examples/lab-scenario.yaml`: hardware-only tank-pressure and two-valve MMIO inventory with no controller actions.
 - `crates/sentinel-scenario/src/test-scenario.yaml`: internal full-schema compiler fixture.
-- `examples/valve-controller.s32`: commented firmware that fills to a pressure target, holds ten simulated seconds, unloads, and closes both valves.
+- `examples/valve-controller.asm`: commented firmware that fills to a pressure target, holds ten simulated seconds, unloads, and closes both valves.
 - `docs/safety-model.md`: claims, invariant families, containment, evidence.
 - `docs/threat-model.md`: assets, untrusted boundaries, abuse cases, controls.
 - `docs/validation.md`: validation layers and current results.
