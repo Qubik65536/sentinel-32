@@ -82,16 +82,21 @@ use the validated program mapping. Safety-control accesses always trap for
 ordinary firmware. The current `sentinel-app run` command is a bounded lab
 harness with a program mapping and a 64 KiB stack only; scenario compilation
 supplies read-only telemetry/feedback slots and write-only actuator-request
-slots to the `tank-run` lab harness. Its hardware YAML declares only
-register existence, types, and reset values. Firmware receives the addresses
-compiled from that inventory, and the assembly owns the demonstrated action
-sequence. The `rocket-run` harness applies the same persistent-machine boundary
-to the full default scenario: compiled symbols provide read-only telemetry and
-feedback plus write-only ordinary actuator requests, while
-`rocket-controller.asm` owns its thresholds, waits, interlock reads, sequencing,
-and command loop. The harness records operator start and simulated supervisor
-approvals separately because ordinary firmware cannot grant them. The manifest
-grants exactly those MMIO capabilities.
+slots to the mission harness. `mission-run` selects the validated v0 adapter
+from the document's declared schema; mission names such as tank and rocket do
+not select different product commands. Hardware-inventory missions declare
+register existence, types, and reset values, while full scenarios additionally
+declare dynamics, rules, phases, faults, and safe states. Firmware receives the
+compiled addresses and owns its demonstrated action sequence. The full-scenario
+adapter records operator start and simulated supervisor approvals separately
+because ordinary firmware cannot grant them. The manifest grants exactly the
+compiled MMIO capabilities.
+
+`mission-advice` is the operator's pre-operation advisory step for every
+mission type. It compares a bounded, identified mission snapshot with the
+configured versioned written rules. The operator and deterministic policy own
+the proceed decision. The runner never treats an AI finding, timeout, or
+provider failure as permission, denial, or output authority.
 
 Hardware-manifest YAML must remain inventory-only. Pressure targets, duration
 counters, branches, loops, operating phases, and valve commands are firmware

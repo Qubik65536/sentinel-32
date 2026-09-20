@@ -28,7 +28,7 @@ authority.
 `sentinel.scenario/v0` document used by compiler tests is an internal crate
 fixture and is not shipped as a runnable example.
 
-The app's `tank-run` demonstration supplies a deterministic lab plant outside
+The app's hardware-inventory `mission-run` adapter supplies a deterministic lab plant outside
 the YAML contract. The operator starts one persistent firmware invocation.
 Every completed inlet/outlet command pair advances the plant by one simulated
 second while that invocation remains active. An open inlet raises pressure by

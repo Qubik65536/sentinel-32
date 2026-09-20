@@ -13,7 +13,7 @@ does not depend on the login directory.
 | Name | Purpose | Initial policy |
 |---|---|---|
 | `S32_AI_CHECK_MODE` | `llama_cpp`, `openai_test`, `fixture`, or `disabled` | Tracked default selects `llama_cpp`; deployment rejects every other mode |
-| `S32_AI_RULES_PATH` | Versioned written rule-set input | Required when checking is enabled; content is bounded and its hash is recorded with every finding |
+| `S32_AI_RULES_PATH` | Versioned written rule-set input for the mission under review | Required when checking is enabled; content is bounded and its hash is recorded with every finding; each mission may select its own rule set |
 | `S32_AI_CHECK_TIMEOUT_MS` | Advisory check deadline | Positive bounded integer; timeout produces checker-unavailable status and never delays control |
 | `S32_AI_MAX_SNAPSHOT_BYTES` | Serialized state-snapshot ceiling | Positive integer no greater than 65536; oversize snapshots are rejected before provider access |
 | `S32_AI_MAX_OUTPUT_BYTES` | Structured finding response ceiling | Positive integer no greater than 65536; oversize responses are rejected |

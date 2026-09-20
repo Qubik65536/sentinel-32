@@ -74,7 +74,7 @@ default health and sample commands are:
 cargo run -p sentinel-app -- ai-health deployment
 S32_AI_RULES_PATH=examples/ai/rocket-written-rules.json \
   cargo run -p sentinel-app -- \
-  ai-check deployment examples/ai/rocket-pressure-snapshot.json
+  mission-advice deployment examples/ai/rocket-pressure-snapshot.json
 ```
 
 `ai-health` checks `/health` and authenticated `/props`, then prints the
@@ -115,17 +115,43 @@ cd /data/home/qnxuser/sentinel-32/release
 export S32_AI_CONFIG_PATH=/data/home/qnxuser/sentinel-32/config/ai-llama-default.env
 
 ./sentinel-app ai-health deployment
-./sentinel-app ai-check deployment \
+./sentinel-app mission-advice deployment \
   /data/home/qnxuser/sentinel-32/examples/ai/rocket-pressure-snapshot.json
-./sentinel-app rocket-run \
+./sentinel-app mission-run \
   /data/home/qnxuser/sentinel-32/examples/rocket-launch-default.yaml \
   /data/home/qnxuser/sentinel-32/examples/rocket-controller.asm 10000
 ```
 
-Run the AI check and deterministic rocket run as separate operations. Stopping
+Run advisory review before the operator chooses whether to invoke the mission.
+They remain separate operations: an AI finding cannot authorize the run, and a
+provider failure cannot become a deterministic safety decision. Stopping
 `llama-server`, using a wrong key, or
-blocking port 8080 must make `ai-health`/`ai-check` fail while `rocket-run`
+blocking port 8080 must make `ai-health`/`mission-advice` fail while `mission-run`
 continues to reach its deterministic result.
+
+For another mission, point `S32_AI_RULES_PATH` at that mission's versioned rule
+set and pass its bounded snapshot to `mission-advice`. A proposed-action review
+represents the contemplated command in typed `proposed.*` snapshot fields and
+includes those paths in the written rules. After reading the advisory, the
+operator may separately request `mission-run`; deterministic validation and
+output gating still decide what can execute.
+
+The tank example deliberately proposes opening both valves so the advisory can
+make a concern visible before the separate mission invocation:
+
+```sh
+export S32_AI_RULES_PATH=/data/home/qnxuser/sentinel-32/examples/ai/tank-written-rules.json
+./sentinel-app mission-advice deployment \
+  /data/home/qnxuser/sentinel-32/examples/ai/tank-proposed-action-snapshot.json
+
+./sentinel-app mission-run \
+  /data/home/qnxuser/sentinel-32/examples/lab-scenario.yaml \
+  /data/home/qnxuser/sentinel-32/examples/valve-controller.asm 10000
+```
+
+The proposed action exists only in the review snapshot; `mission-advice` cannot
+write it to the simulated plant. The controller subsequently issues its own
+requests through the deterministic mission runner.
 
 ## OpenAI development check
 
@@ -178,7 +204,7 @@ On QNX, capture one failing response with:
 ```sh
 umask 077
 export S32_AI_DIAGNOSTIC_RESPONSE_PATH=/data/home/qnxuser/sentinel-32/artifacts/llama-response.json
-./sentinel-app ai-check deployment \
+./sentinel-app mission-advice deployment \
   /data/home/qnxuser/sentinel-32/examples/ai/rocket-pressure-snapshot.json
 unset S32_AI_DIAGNOSTIC_RESPONSE_PATH
 ```

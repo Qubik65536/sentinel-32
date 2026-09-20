@@ -26,6 +26,12 @@ unsigned integers, and strings, so JSON decoding cannot erase numeric type.
 Field paths contain exactly a typed namespace and ID, such as
 `telemetry.fuel_pressure`.
 
+For a pre-operation mission review, the snapshot may include typed
+`proposed.*` fields alongside current telemetry, feedback, phase, and authority
+state. Written rules cite those exact proposed-action and current-state fields.
+The model compares them and reports findings; it does not execute the action or
+produce a proceed decision.
+
 A written rule contains an ID, an optional deterministic scenario-rule ID for
 review traceability, bounded human-readable text, and the complete list of
 snapshot fields needed to assess it. The rule-set hash is independent of

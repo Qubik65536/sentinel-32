@@ -97,6 +97,13 @@ virtual-cycle count plus aligned first/last PCs, allowing an operator to
 correlate firmware execution with triggered rules and hold/abort state.
 Human-readable output separates advisory `NOTICE` events from `ISSUE` events
 that inhibit, hold, or abort, and emits an aggregate `ISSUE-SUMMARY`.
+The common `mission-run` CLI is exercised with both the hardware-inventory tank
+mission and the full-scenario rocket mission. `mission-advice` is exercised
+with the same provider-neutral fixture contract and prints its lack of decision
+authority before the structured findings.
+The tank proposed-action fixture is hash-valid and represents both valves open;
+its written rules bind that proposal and current pressure for a second mission
+type. Upload packaging includes both files.
 
 The host `run examples/countdown.asm 9` case halts after nine steps and cycles
 with `PC=0x00000014` and `R1=0`. Budget 8 is rejected before `HALT` with exit
@@ -120,7 +127,7 @@ the same licensed final-link step. Live QNX `llama-server` requests have since
 reached the service, but no response has yet passed the complete advisory
 contract. No live OpenAI result is claimed in this record.
 
-The host lane passes 72 tests after adding the deployed
+The host lane passes 73 tests after adding the deployed
 `llama-server` compatibility case. That case reproduces a successful `stop`
 completion with schema-valid content inside one whole-response Markdown JSON
 fence. The adapter removes that wrapper and then runs the unchanged strict

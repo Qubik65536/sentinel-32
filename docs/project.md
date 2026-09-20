@@ -33,6 +33,13 @@ The first scenario is a fully simulated rocket ground-launch sequencer. The reus
 - **Physical response remains external:** The hardware model may update
   read-only telemetry and feedback while firmware runs. It models physical
   response and never chooses controller state or writes actuator requests.
+- **Mission:** An operator-visible pairing of a declared hardware inventory or
+  full scenario with S32 firmware. `mission-run` is the common execution
+  interface; tank and rocket are examples rather than runner types.
+- **Mission advisory:** A bounded comparison of an identified mission snapshot
+  with its configured versioned written rules, requested with
+  `mission-advice` before the operator considers execution. It informs the
+  operator and never grants or removes deterministic output authority.
 
 ## Non-goals
 

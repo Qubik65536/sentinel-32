@@ -82,7 +82,7 @@ Compile the hardware inventory and run the assembly-owned action sequence with:
 cargo run -p sentinel-app -- hardware-check examples/lab-scenario.yaml
 cargo run -p sentinel-app -- hardware-compile \
   examples/lab-scenario.yaml bundle.json symbols.inc
-cargo run -p sentinel-app -- tank-run \
+cargo run -p sentinel-app -- mission-run \
   examples/lab-scenario.yaml examples/valve-controller.asm 1000
 ```
 
@@ -102,7 +102,7 @@ cargo run -p sentinel-app -- scenario-check \
   examples/rocket-launch-default.yaml
 cargo run -p sentinel-app -- scenario-compile \
   examples/rocket-launch-default.yaml rocket-bundle.json rocket-symbols.inc
-cargo run -p sentinel-app -- rocket-run \
+cargo run -p sentinel-app -- mission-run \
   examples/rocket-launch-default.yaml examples/rocket-controller.asm 5000
 ```
 

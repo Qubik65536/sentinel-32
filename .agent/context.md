@@ -8,6 +8,11 @@ Control operations follow two accepted design principles: an operator starts
 one persistent S32 invocation that runs until completion or bounded failure,
 and `sentinel.hardware/v0` YAML contains hardware inventory only. Operational
 thresholds, waits, sequencing, loops, and actuator requests belong to assembly.
+The operator interface now treats both hardware-inventory and full-scenario
+operations as missions: `mission-run` selects the validated adapter from the
+declared schema. `mission-advice` applies the same bounded advisory contract to
+any mission snapshot and written-rule set before a human considers execution;
+the deterministic system retains all proceed and output authority.
 
 The repository has a Rust workspace. `sentinel-core` implements
 typed S32 decode/encode, the source assembler, validated manifests and sparse
@@ -90,12 +95,19 @@ Current requirements give AI one advisory function: compare a bounded current-st
 - `examples/rocket-controller.asm`: persistent S32 controller for the nominal
   normalized rocket run; firmware owns thresholds, waits, interlock checks,
   actuator sequencing, ignition feedback, shutdown, and its abort path.
-- `rocket-run` prints each completed six-write command frame with its first and
+- `mission-run` prints each completed full-scenario command frame with its first and
   last assembly PCs, instruction count, virtual-cycle count, scenario
   transition, active deterministic rules, hold/abort state, requested outputs,
   and applied outputs.
   Separate uppercase `ISSUE` lines identify inhibit/hold/abort rules, `NOTICE`
   lines retain advisory-only rules, and `ISSUE-SUMMARY` aggregates both.
+- `mission-advice` applies the provider-neutral advisory contract to any
+  bounded mission snapshot and configured written-rule set before an operator
+  considers starting `mission-run`; it has no proceed or output authority.
+- `examples/ai/tank-proposed-action-snapshot.json` and
+  `tank-written-rules.json` demonstrate a second mission type with a
+  deliberately concerning proposed action; the proposal cannot reach mission
+  outputs.
 - `docs/safety-model.md`: claims, invariant families, containment, evidence.
 - `docs/threat-model.md`: assets, untrusted boundaries, abuse cases, controls.
 - `docs/validation.md`: validation layers and current results.

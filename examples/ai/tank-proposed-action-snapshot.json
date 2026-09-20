@@ -1,0 +1,17 @@
+{
+  "hash": "eb682581e9ac6860cd2e47908669e7aead669341433cd03607af9518ff9bfbbf",
+  "schema": "sentinel.ai-snapshot/v0",
+  "version": 1,
+  "scenario_id": "tank_hardware",
+  "scenario_bundle_hash": "b96e97412c6762b20b78a04f7de2b3450d668f2a8f030022479a471a7683681c",
+  "observation": {
+    "tick": 0,
+    "unix_time_ms": null
+  },
+  "fields": {
+    "proposed.inlet_valve": {"text": "open"},
+    "proposed.outlet_valve": {"text": "open"},
+    "telemetry.tank_pressure": {"signed": 50000}
+  },
+  "missing_fields": []
+}

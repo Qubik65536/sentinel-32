@@ -1,0 +1,23 @@
+{
+  "hash": "812372357d8aa399b34e3aba92d632ff6d562127850ba3fe051e69ab09116432",
+  "schema": "sentinel.ai-written-rules/v0",
+  "version": 1,
+  "rules": [
+    {
+      "id": "mutually_exclusive_valves_advisory",
+      "deterministic_rule_id": null,
+      "text": "Report a possible violation when the proposed inlet and outlet valve actions are both open. This advisory does not replace deterministic output policy.",
+      "required_fields": ["proposed.inlet_valve", "proposed.outlet_valve"]
+    },
+    {
+      "id": "tank_pressure_action_advisory",
+      "deterministic_rule_id": null,
+      "text": "Report unknown if tank pressure is unavailable. Otherwise compare the proposed valve actions with the supplied normalized tank pressure and report any apparent inconsistency.",
+      "required_fields": [
+        "telemetry.tank_pressure",
+        "proposed.inlet_valve",
+        "proposed.outlet_valve"
+      ]
+    }
+  ]
+}

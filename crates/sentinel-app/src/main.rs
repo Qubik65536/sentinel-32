@@ -103,7 +103,7 @@ fn run() -> Result<(), String> {
     let args: Vec<String> = env::args().skip(1).collect();
     if args
         .first()
-        .is_some_and(|command| command.starts_with("ai-"))
+        .is_some_and(|command| command.starts_with("ai-") || command == "mission-advice")
     {
         load_ai_config()?;
     }
@@ -201,21 +201,20 @@ fn run() -> Result<(), String> {
             }
             Ok(())
         }
-        [command, scenario, firmware, cycle_budget] if command == "tank-run" => {
-            run_scenario_firmware(
-                scenario,
-                firmware,
-                parse_cycle_budget(cycle_budget)?,
-            )
-        }
-        [command, scenario, firmware, cycle_budget] if command == "rocket-run" => {
-            run_rocket_firmware(
-                scenario,
+        [command, mission, firmware, cycle_budget] if command == "mission-run" => {
+            run_mission(
+                mission,
                 firmware,
                 parse_cycle_budget(cycle_budget)?,
             )
         }
         [command, profile, snapshot] if command == "ai-check" => {
+            run_ai_check(profile, snapshot)
+        }
+        [command, profile, snapshot] if command == "mission-advice" => {
+            println!(
+                "ADVISORY-REVIEW authority=none decision_owner=operator_and_deterministic_policy"
+            );
             run_ai_check(profile, snapshot)
         }
         [command, profile] if command == "ai-health" => run_ai_health(profile),
@@ -247,10 +246,32 @@ fn run() -> Result<(), String> {
             Ok(())
         }
         _ => Err(
-            "usage: sentinel-app [decode <word> | check <source.asm> | assemble <source.asm> [output.bin] | run <source.asm> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | tank-run <hardware.yaml> <firmware.asm> <cycle-budget> | rocket-run <scenario.yaml> <firmware.asm> <cycle-budget> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks> | ai-health <deployment|development> | ai-check <deployment|development> <snapshot.json>]"
+            "usage: sentinel-app [decode <word> | check <source.asm> | assemble <source.asm> [output.bin] | run <source.asm> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | mission-run <mission.yaml> <firmware.asm> <cycle-budget> | mission-advice <deployment|development> <snapshot.json> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks> | ai-health <deployment|development> | ai-check <development> <snapshot.json>]"
                 .to_owned(),
         ),
     }
+}
+
+fn run_mission(mission_path: &str, firmware_path: &str, cycle_budget: u64) -> Result<(), String> {
+    let source = read_text(mission_path)?;
+    match mission_schema(&source)? {
+        "sentinel.hardware/v0" => run_scenario_firmware(mission_path, firmware_path, cycle_budget),
+        "sentinel.scenario/v0" => run_rocket_firmware(mission_path, firmware_path, cycle_budget),
+        schema => Err(format!("unsupported mission schema `{schema}`")),
+    }
+}
+
+fn mission_schema(source: &str) -> Result<&str, String> {
+    source
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            (key.trim() == "schema").then_some(value.trim())
+        })
+        .filter(|schema| !schema.is_empty())
+        .ok_or_else(|| "mission document is missing top-level `schema`".to_owned())
 }
 
 fn run_ai_health(profile: &str) -> Result<(), String> {
@@ -524,7 +545,7 @@ fn run_rocket_firmware(
     }
 
     println!(
-        "rocket-firmware scenario={} publication={} bundle={} firmware={} start=operator_once cycle_budget={}",
+        "mission-firmware mission={} schema=sentinel.scenario/v0 publication={} bundle={} firmware={} start=operator_once cycle_budget={}",
         compilation.bundle.scenario_id,
         compilation.bundle.publication,
         compilation.bundle_hash,
@@ -899,7 +920,7 @@ fn run_scenario_firmware(
     }
 
     println!(
-        "tank-firmware hardware={} publication={} bundle={} firmware={} start=operator_once cycle_budget={}",
+        "mission-firmware mission={} schema=sentinel.hardware/v0 publication={} bundle={} firmware={} start=operator_once cycle_budget={}",
         compilation.bundle.scenario_id,
         compilation.bundle.publication,
         compilation.bundle_hash,
@@ -1372,8 +1393,8 @@ mod tests {
     };
 
     use super::{
-        execute_firmware_tick, execute_rocket_firmware, mmio_symbol, parse_ai_config,
-        parse_cycle_budget, parse_tick_count, parse_word,
+        execute_firmware_tick, execute_rocket_firmware, mission_schema, mmio_symbol,
+        parse_ai_config, parse_cycle_budget, parse_tick_count, parse_word,
     };
 
     const SCENARIO: &str = include_str!("../../../examples/lab-scenario.yaml");
@@ -1400,6 +1421,19 @@ mod tests {
         assert_eq!(parse_tick_count("3"), Ok(3));
         assert!(parse_tick_count("0").is_err());
         assert!(parse_tick_count("many").is_err());
+    }
+
+    #[test]
+    fn identifies_supported_mission_document_schemas() {
+        assert_eq!(
+            mission_schema("# mission\nschema: sentinel.hardware/v0\nid: tank"),
+            Ok("sentinel.hardware/v0")
+        );
+        assert_eq!(
+            mission_schema("schema: sentinel.scenario/v0\nid: rocket"),
+            Ok("sentinel.scenario/v0")
+        );
+        assert!(mission_schema("id: missing_schema").is_err());
     }
 
     #[test]

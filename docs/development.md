@@ -283,7 +283,7 @@ Both commands must exit `0` and report five MMIO entries. Then run the
 assembly-owned action sequence against those YAML-declared registers:
 
 ```sh
-/data/home/qnxuser/sentinel-32/release/sentinel-app tank-run \
+/data/home/qnxuser/sentinel-32/release/sentinel-app mission-run \
   /data/home/qnxuser/sentinel-32/examples/lab-scenario.yaml \
   /data/home/qnxuser/sentinel-32/examples/valve-controller.asm 1000
 echo $?
@@ -307,7 +307,7 @@ encoding, and assembly retained control until completion. The command must exit
 Also verify fail-closed argument handling:
 
 ```sh
-/data/home/qnxuser/sentinel-32/release/sentinel-app tank-run \
+/data/home/qnxuser/sentinel-32/release/sentinel-app mission-run \
   /data/home/qnxuser/sentinel-32/examples/lab-scenario.yaml \
   /data/home/qnxuser/sentinel-32/examples/valve-controller.asm 256
 echo $?
@@ -340,7 +340,7 @@ and exit `0`.
 Then start the persistent assembly-controlled sample:
 
 ```sh
-/data/home/qnxuser/sentinel-32/release/sentinel-app rocket-run \
+/data/home/qnxuser/sentinel-32/release/sentinel-app mission-run \
   /data/home/qnxuser/sentinel-32/examples/rocket-launch-default.yaml \
   /data/home/qnxuser/sentinel-32/examples/rocket-controller.asm \
   5000

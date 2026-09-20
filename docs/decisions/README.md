@@ -17,3 +17,4 @@ These decisions establish the bootstrap baseline. “Accepted” means the proje
 | [DEC-011](DEC-011-advisory-ai-checker.md) | Advisory rule checker with OpenAI tests and self-hosted `llama.cpp` deployment |
 | [DEC-012](DEC-012-single-invocation-control.md) | Persistent assembly-controlled operation |
 | [DEC-013](DEC-013-networked-llama-server.md) | Authenticated networked `llama.cpp` deployment server |
+| [DEC-014](DEC-014-unified-mission-workflow.md) | Unified mission execution with pre-operation AI advisory |

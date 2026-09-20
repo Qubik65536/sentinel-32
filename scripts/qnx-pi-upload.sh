@@ -43,6 +43,10 @@ cp "$PROJECT_ROOT/examples/ai/rocket-pressure-snapshot.json" \
   "$STAGING_TREE/examples/ai/rocket-pressure-snapshot.json"
 cp "$PROJECT_ROOT/examples/ai/rocket-written-rules.json" \
   "$STAGING_TREE/examples/ai/rocket-written-rules.json"
+cp "$PROJECT_ROOT/examples/ai/tank-proposed-action-snapshot.json" \
+  "$STAGING_TREE/examples/ai/tank-proposed-action-snapshot.json"
+cp "$PROJECT_ROOT/examples/ai/tank-written-rules.json" \
+  "$STAGING_TREE/examples/ai/tank-written-rules.json"
 cp "$PROJECT_ROOT/examples/ai/rocket-fixture-response.json" \
   "$STAGING_TREE/examples/ai/rocket-fixture-response.json"
 cp "$PROJECT_ROOT/Cargo.lock" "$STAGING_TREE/artifacts/Cargo.lock"

@@ -140,7 +140,7 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
   `examples/rocket-launch-default.yaml`. It compiles to 23 deterministic MMIO
   slots and golden bundle hash
   `72975636c2b7c0db7931bc09defcd3ce27adc3ab98f76fa4d908128f94c25388`.
-  `examples/rocket-controller.asm` and the `rocket-run` command execute the
+  `examples/rocket-controller.asm` and the `mission-run` command execute the
   nominal sequence as one persistent S32 invocation; assembly owns operational
   thresholds, waits, interlock checks, actuator requests, ignition feedback,
   shutdown, and abort commands while the runner records simulated supervisor
@@ -203,6 +203,23 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 
 ## Advisory AI safety check and UI
 
+### MISSION-001 — Unify mission execution and advisory review
+
+- **Category / status:** integration / blocked
+- **Dependencies:** SCEN-002, AI-001
+- **Description:** Present hardware-inventory and full-scenario operations as
+  missions rather than separate tank and rocket products, and make the bounded
+  advisory review available before any supported mission type.
+- **Acceptance:** One `mission-run` command selects the validated adapter from
+  the declared document schema; one `mission-advice` command accepts any valid
+  AI-001 snapshot and configured written-rule set; output states that AI has no
+  decision authority; provider failure cannot authorize, deny, or interrupt
+  deterministic execution; existing example results remain reproducible.
+- **Progress:** Both example missions complete through `mission-run`; the
+  fixture-backed rocket snapshot completes through `mission-advice` with the
+  authority banner; host lane and QNX target check pass. Formal completion
+  waits on its blocked dependencies.
+
 ### AI-001 — Specify the advisory rule-check contract
 
 - **Category / status:** AI / blocked
@@ -246,7 +263,7 @@ This is the canonical work plan. Status values are `complete`, `ready`, `blocked
 - **Dependencies:** VM-002, TWIN-001, SAFE-001
 - **Description:** Provide the authoritative headless event/state interface.
 - **Acceptance:** Versioned bounded records expose source/instruction, registers, memory/output changes, scenario state, policy results, cycles, faults, and evidence references; slow/disconnected consumers cannot delay control; malformed requests cannot mutate authority; deterministic fixtures are documented.
-- **Progress:** The human-readable `rocket-run` output correlates every
+- **Progress:** The human-readable full-scenario `mission-run` output correlates every
   completed assembly command frame with its first/last PCs, instruction and
   virtual cycle counts, scenario phase transition, active rules/faults, hold
   and abort state, supervisor event, firmware requests, and applied requests.
