@@ -63,6 +63,8 @@ An operator-triggered operation uses one persistent S32 machine invocation, as
 recorded in `DEC-012`. Firmware loops, retains its own control state, and halts
 only after the operation finishes. The hardware model updates read-only MMIO as
 physical state changes, but it does not restart firmware or choose actions.
+This is a system boundary: one simulated second or hardware update must never
+be implemented by launching the firmware again.
 
 S32 has 32 general registers (`R0` is hardwired to zero), `HI`, `LO`, `PC`, fixed 32-bit little-endian instructions, no delay slots, deterministic virtual cycles, and a sparse 32-bit address space split into program, data, stack, telemetry, commands, feedback, supervisor, and protected safety regions. The accepted exact encoding is in `docs/s32-isa.md`; decode, encode, assembly, execution, trap precedence, memory permissions, manifest capabilities, and cycle budgets are implemented in `sentinel-core`.
 
@@ -78,6 +80,10 @@ slots to the `tank-run` lab harness. Its hardware YAML declares only
 register existence, types, and reset values. Firmware receives the addresses
 compiled from that inventory, and the assembly owns the demonstrated action
 sequence. The manifest grants exactly those MMIO capabilities.
+
+Hardware-manifest YAML must remain inventory-only. Pressure targets, duration
+counters, branches, loops, operating phases, and valve commands are firmware
+logic and must not be added to `sentinel.hardware/v0`.
 
 ## Scenario boundary
 

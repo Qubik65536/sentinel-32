@@ -4,6 +4,11 @@ Last updated: 2026-09-19 during `SCEN-002`.
 
 ## Current implementation
 
+Control operations follow two accepted design principles: an operator starts
+one persistent S32 invocation that runs until completion or bounded failure,
+and `sentinel.hardware/v0` YAML contains hardware inventory only. Operational
+thresholds, waits, sequencing, loops, and actuator requests belong to assembly.
+
 The repository has a Rust workspace. `sentinel-core` implements
 typed S32 decode/encode, the source assembler, validated manifests and sparse
 memory, and complete S32 v0 reference execution with permissions, capabilities,

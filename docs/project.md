@@ -19,6 +19,21 @@ The first scenario is a fully simulated rocket ground-launch sequencer. The reus
 - Offer a text/NDJSON observability path, browser operations dashboard, and declarative Scenario Studio.
 - Run essential components as isolated QNX processes while keeping core logic portable.
 
+## Control design principles
+
+- **Operator-triggered program:** An operator starts one S32 program for one
+  operation. That single machine invocation retains state and controls the
+  operation until it completes, traps, or exhausts its mandatory cycle budget.
+  No host, simulator, UI, or network service repeatedly restarts the program to
+  advance its sequence.
+- **Hardware-only YAML:** A `sentinel.hardware/v0` document declares only which
+  hardware registers exist, their types, ranges, units, and reset values. It
+  contains no thresholds, waits, phases, transitions, control sequence, or
+  actuator actions. Those operational decisions belong to S32 assembly.
+- **Physical response remains external:** The hardware model may update
+  read-only telemetry and feedback while firmware runs. It models physical
+  response and never chooses controller state or writes actuator requests.
+
 ## Non-goals
 
 - Controlling a physical rocket, real propellant hardware, GPIO, sensors, servos, or displays.

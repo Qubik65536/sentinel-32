@@ -5,6 +5,12 @@ which MMIO registers exist. It does not declare phases, transitions, rules,
 dynamics, faults, timing, or actions. S32 firmware controls the order of
 actuator requests when it runs.
 
+This inventory-only boundary is a design principle rather than a convention.
+A hardware manifest must not contain an operation trigger, pressure target,
+hold duration, loop, sequence, or completion condition. An operator triggers
+the assembled S32 program once, and that program remains active until the whole
+operation completes or bounded execution stops it.
+
 The root keys are `schema`, `id`, `publication`, `types`, `telemetry`,
 `actuators`, and `feedback`. Unknown keys are rejected. `types` maps enum names
 to ordered `variants`; the zero-based variant position is its MMIO integer.
