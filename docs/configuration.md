@@ -24,6 +24,7 @@ does not depend on the login directory.
 | `S32_LLAMA_MODEL_PATH` | Deployment-server GGUF path | Launcher default is `~/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf` |
 | `S32_AI_MAX_OUTPUT_TOKENS` | Provider generation limit | Positive integer, default 2048 and maximum 8192 |
 | `S32_AI_FIXTURE_RESPONSE_PATH` | Deterministic response fixture | Required only in `fixture` mode |
+| `S32_AI_DIAGNOSTIC_RESPONSE_PATH` | Optional raw bounded `llama.cpp` response capture | Disabled by default; use only for explicit diagnosis, protect the file as operator data, and unset it afterward; the client does not add the API key to the capture |
 | `OPENAI_API_KEY` | OpenAI test credential | No default; test adapter only; never logged, committed, or sent over Sentinel IPC |
 | `S32_OPENAI_TEST_MODEL` | Pinned checker test model | Required only in `openai_test` mode and recorded in test results |
 | `S32_CONTROL_PERIOD_US` | Controller period | Positive integer; target value requires QNX measurement |

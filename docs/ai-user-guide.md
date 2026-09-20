@@ -155,10 +155,12 @@ activation, control outputs, deterministic policy, or safety evidence.
   the running server.
 - contract error: the model returned structurally or semantically invalid
   findings; discard the whole advisory result.
-- `InvalidProviderResponse` after a `stop` completion: capture the raw response
-  without its credential. The client accepts plain schema JSON and the exact
-  whole-response Markdown JSON fence observed from the QNX server; any
-  other preamble, trailing text, or malformed wrapper remains invalid.
+- `InvalidLlamaResponse` names the failed parsing stage. To capture the bounded
+  raw server envelope without the API key, create a protected diagnostic file,
+  set `S32_AI_DIAGNOSTIC_RESPONSE_PATH` to its absolute path, and repeat the
+  check. The client accepts plain schema JSON and the exact whole-response
+  Markdown JSON fence observed from the QNX server; any other preamble,
+  trailing text, or malformed wrapper remains invalid.
 - timeout or response-size error: reduce load or investigate the server. Do not
   increase limits without reviewing the bounded-data assumptions.
 
@@ -167,6 +169,21 @@ reported as checker unavailable; it is never repaired into an authoritative
 result. The deployment request disables model reasoning, caps citation-array
 and rationale lengths, and reports a token-limited completion separately from
 malformed output.
+
+On QNX, capture one failing response with:
+
+```sh
+umask 077
+export S32_AI_DIAGNOSTIC_RESPONSE_PATH=/data/home/qnxuser/sentinel-32/artifacts/llama-response.json
+./sentinel-app ai-check deployment \
+  /data/home/qnxuser/sentinel-32/examples/ai/rocket-pressure-snapshot.json
+unset S32_AI_DIAGNOSTIC_RESPONSE_PATH
+```
+
+Treat the file as operator data because a model response can repeat supplied
+snapshot or rule content. The client writes only the bounded response body and
+does not add the provider credential. Remove it after diagnosis rather than
+adding it to source control or validation evidence.
 
 ## Cleanup and records
 

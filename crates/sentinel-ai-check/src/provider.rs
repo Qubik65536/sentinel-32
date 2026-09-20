@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
@@ -34,6 +35,8 @@ pub enum ProviderError {
     IncompleteResponse,
     Protocol,
     InvalidProviderResponse,
+    InvalidLlamaResponse(&'static str),
+    DiagnosticCapture,
     Contract(CheckerError),
 }
 
@@ -85,6 +88,7 @@ pub struct LlamaCppConfig {
     pub api_key: String,
     pub timeout: Duration,
     pub max_output_tokens: u32,
+    pub diagnostic_response_path: Option<String>,
 }
 
 impl fmt::Debug for LlamaCppConfig {
@@ -97,6 +101,7 @@ impl fmt::Debug for LlamaCppConfig {
             .field("api_key", &"[REDACTED]")
             .field("timeout", &self.timeout)
             .field("max_output_tokens", &self.max_output_tokens)
+            .field("diagnostic_response_path", &self.diagnostic_response_path)
             .finish()
     }
 }
@@ -120,6 +125,15 @@ impl LlamaCppConfig {
         }
         if self.api_key.is_empty() || self.timeout.is_zero() || self.max_output_tokens == 0 {
             return Err(ProviderError::Configuration("llama limits or credential"));
+        }
+        if self
+            .diagnostic_response_path
+            .as_ref()
+            .is_some_and(|path| path.is_empty() || path.contains(['\r', '\n']))
+        {
+            return Err(ProviderError::Configuration(
+                "llama diagnostic response path",
+            ));
         }
         Ok(())
     }
@@ -217,6 +231,9 @@ impl AdvisoryProvider for LlamaCppProvider {
             self.config.timeout,
             limits.max_response_bytes,
         )?;
+        if let Some(path) = &self.config.diagnostic_response_path {
+            fs::write(path, &bytes).map_err(|_| ProviderError::DiagnosticCapture)?;
+        }
         parse_llama_completion(&bytes, request, limits, identity)
     }
 }
@@ -227,18 +244,18 @@ fn parse_llama_completion(
     limits: Limits,
     identity: LlamaServerIdentity,
 ) -> Result<CheckResponse, ProviderError> {
-    let envelope: ChatCompletion =
-        serde_json::from_slice(bytes).map_err(|_| ProviderError::InvalidProviderResponse)?;
+    let envelope: ChatCompletion = serde_json::from_slice(bytes)
+        .map_err(|_| ProviderError::InvalidLlamaResponse("completion envelope"))?;
     let choice = envelope
         .choices
         .first()
-        .ok_or(ProviderError::InvalidProviderResponse)?;
+        .ok_or(ProviderError::InvalidLlamaResponse("missing choice"))?;
     if choice.finish_reason.as_deref() != Some("stop") {
         return Err(ProviderError::IncompleteResponse);
     }
     let content = model_json_payload(&choice.message.content)?;
-    let findings: ModelFindings =
-        serde_json::from_str(content).map_err(|_| ProviderError::InvalidProviderResponse)?;
+    let findings: ModelFindings = serde_json::from_str(content)
+        .map_err(|_| ProviderError::InvalidLlamaResponse("findings JSON"))?;
     validate_wrapped_findings(
         request,
         limits,
@@ -265,7 +282,7 @@ fn model_json_payload(content: &str) -> Result<&str, ProviderError> {
     let inner = after_opening
         .trim_start_matches(['\r', '\n'])
         .strip_suffix("```")
-        .ok_or(ProviderError::InvalidProviderResponse)?;
+        .ok_or(ProviderError::InvalidLlamaResponse("JSON fence"))?;
     Ok(inner.trim())
 }
 
@@ -637,6 +654,7 @@ mod tests {
             api_key: "secret-value".to_owned(),
             timeout: Duration::from_secs(1),
             max_output_tokens: 512,
+            diagnostic_response_path: None,
         };
         assert_eq!(
             config.validate(),
@@ -737,6 +755,34 @@ mod tests {
                 }
             ),
             Err(ProviderError::IncompleteResponse)
+        );
+    }
+
+    #[test]
+    fn llama_adapter_identifies_invalid_response_stage() {
+        let identity = || LlamaServerIdentity {
+            build_info: "b123-deadbeef".to_owned(),
+            model: "qwen2.5-1.5b".to_owned(),
+            model_sha256: "b".repeat(64),
+        };
+        assert_eq!(
+            parse_llama_completion(b"not-json", &request(), Limits::default(), identity()),
+            Err(ProviderError::InvalidLlamaResponse("completion envelope"))
+        );
+        let bad_findings = json!({
+            "choices": [{
+                "message": {"content": "{\"unexpected\":true}"},
+                "finish_reason": "stop"
+            }]
+        });
+        assert_eq!(
+            parse_llama_completion(
+                bad_findings.to_string().as_bytes(),
+                &request(),
+                Limits::default(),
+                identity()
+            ),
+            Err(ProviderError::InvalidLlamaResponse("findings JSON"))
         );
     }
 }

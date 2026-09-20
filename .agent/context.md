@@ -45,7 +45,10 @@ content was valid structured JSON wrapped in a Markdown JSON fence. The client
 now disables reasoning, tightens output bounds, reports non-stop finish reasons
 as incomplete, and removes only a complete outer JSON fence before applying
 strict local parsing and semantic validation. This fix still needs a rebuilt
-QNX run.
+QNX run. A subsequent live run still returned an invalid provider response;
+the client now reports which response stage failed and supports an explicit,
+bounded raw-response capture path for diagnosis. Capture is disabled by
+default, and the client does not add the provider credential to it.
 
 Canonical S32 source presentation uses lowercase MIPS-style mnemonics,
 directives, and registers with spaced operands. Markdown source examples use

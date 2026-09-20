@@ -322,6 +322,7 @@ fn llama_provider(profile: DeploymentProfile) -> Result<LlamaCppProvider, String
         api_key: required_env("S32_LLAMA_API_KEY")?,
         timeout: Duration::from_millis(ai_timeout_ms()?),
         max_output_tokens: optional_positive_env("S32_AI_MAX_OUTPUT_TOKENS", 2_048, 8_192)? as u32,
+        diagnostic_response_path: configured_value("S32_AI_DIAGNOSTIC_RESPONSE_PATH")?,
     })
     .map_err(|error| error.to_string())
 }
@@ -482,6 +483,7 @@ fn is_ai_config_key(name: &str) -> bool {
             | "S32_AI_MAX_OUTPUT_BYTES"
             | "S32_AI_MAX_OUTPUT_TOKENS"
             | "S32_AI_FIXTURE_RESPONSE_PATH"
+            | "S32_AI_DIAGNOSTIC_RESPONSE_PATH"
             | "S32_LLAMA_BASE_URL"
             | "S32_LLAMA_MODEL_ID"
             | "S32_LLAMA_MODEL_SHA256"
@@ -1291,7 +1293,7 @@ mod tests {
     fn parses_strict_ai_configuration() {
         let mut config = BTreeMap::new();
         parse_ai_config(
-            "# defaults\nS32_AI_CHECK_MODE=llama_cpp\nS32_LLAMA_MODEL_ID=qwen2.5-1.5b\nS32_LLAMA_API_KEY=test-key\n",
+            "# defaults\nS32_AI_CHECK_MODE=llama_cpp\nS32_LLAMA_MODEL_ID=qwen2.5-1.5b\nS32_LLAMA_API_KEY=test-key\nS32_AI_DIAGNOSTIC_RESPONSE_PATH=/tmp/llama-response.json\n",
             "defaults",
             &mut config,
         )
@@ -1303,6 +1305,12 @@ mod tests {
         assert_eq!(
             config.get("S32_LLAMA_API_KEY").map(String::as_str),
             Some("test-key")
+        );
+        assert_eq!(
+            config
+                .get("S32_AI_DIAGNOSTIC_RESPONSE_PATH")
+                .map(String::as_str),
+            Some("/tmp/llama-response.json")
         );
         assert!(
             parse_ai_config("UNKNOWN=value\n", "bad", &mut config).is_err(),

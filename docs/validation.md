@@ -115,7 +115,7 @@ the same licensed final-link step. Live QNX `llama-server` requests have since
 reached the service, but no response has yet passed the complete advisory
 contract. No live OpenAI result is claimed in this record.
 
-The 2026-09-19 host lane passes 70 tests after adding the deployed
+The host lane passes 71 tests after adding the deployed
 `llama-server` compatibility case. That case reproduces a successful `stop`
 completion with schema-valid content inside one whole-response Markdown JSON
 fence. The adapter removes that wrapper and then runs the unchanged strict
@@ -124,3 +124,6 @@ a live QNX advisory check, so structured-response compatibility remains
 partially observed rather than validated end to end.
 The QNX-modified toolchain also completed `cargo +qnx800 check --workspace
 --target aarch64-unknown-nto-qnx800 --release` for this source revision.
+Parser tests now distinguish malformed completion envelopes from malformed
+findings JSON. The optional bounded diagnostic capture is an operator aid, not
+safety evidence, and remains disabled unless explicitly configured.
