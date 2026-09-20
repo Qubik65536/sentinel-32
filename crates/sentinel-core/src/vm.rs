@@ -1901,8 +1901,8 @@ mod tests {
     }
 
     #[test]
-    fn countdown_program_runs_deterministically_to_halt() {
-        let source = include_str!("../../../examples/countdown.asm");
+    fn sample_analysis_program_runs_deterministically_to_halt() {
+        let source = include_str!("../../../examples/sample-analysis.asm");
         let assembly = crate::assembler::assemble(source, 0)
             .unwrap_or_else(|diagnostics| panic!("{diagnostics:?}"));
         let entry = assembly.entry.unwrap_or(assembly.origin);
@@ -1910,11 +1910,19 @@ mod tests {
         vm.slots[0] = MemorySlot::new(assembly.origin, assembly.bytes, Permissions::READ_EXECUTE)
             .unwrap_or_else(|error| panic!("{error}"));
         vm.pc = entry;
-        let result = vm.run(100).unwrap_or_else(|error| panic!("{error}"));
+        let result = vm.run(256).unwrap_or_else(|error| panic!("{error}"));
         assert_eq!(result.status, MachineStatus::Halted);
-        assert_eq!(result.steps, 9);
-        assert_eq!(result.cycles, 9);
-        assert_eq!(vm.register(register(1)), 0);
-        assert_eq!(vm.pc(), 20);
+        assert_eq!(result.steps, 91);
+        assert_eq!(result.cycles, 112);
+        assert_eq!(vm.register(register(2)), 66);
+        assert_eq!(vm.register(register(3)), 25);
+        assert_eq!(vm.register(register(7)), 3);
+        assert_eq!(vm.register(register(8)), 13);
+        assert_eq!(vm.register(register(9)), 1);
+        assert_eq!(
+            vm.register(register(29)),
+            STACK_BASE + u32::try_from(STACK_SIZE).unwrap_or(0)
+        );
+        assert_eq!((vm.hi(), vm.lo(), vm.pc()), (1, 13, 0x70));
     }
 }

@@ -7,7 +7,7 @@ These decisions establish the bootstrap baseline. “Accepted” means the proje
 | [DEC-001](DEC-001-s32-isa.md) | Custom fixed-width S32 ISA |
 | [DEC-002](DEC-002-ai-untrusted.md) | Superseded AI firmware-proposal role |
 | [DEC-003](DEC-003-portable-core.md) | Portable core and isolated QNX code |
-| [DEC-004](DEC-004-active-shadow.md) | Active/shadow lifecycle and hash-bound evidence |
+| [DEC-004](DEC-004-active-shadow.md) | Superseded active/shadow lifecycle proposal |
 | [DEC-005](DEC-005-digital-twin.md) | Software launch-pad digital twin |
 | [DEC-006](DEC-006-blocking-runtime.md) | Blocking processes and threads for MVP |
 | [DEC-007](DEC-007-qnx-toolchain.md) | Official QNX-modified Rust toolchain |
@@ -18,3 +18,4 @@ These decisions establish the bootstrap baseline. “Accepted” means the proje
 | [DEC-012](DEC-012-single-invocation-control.md) | Persistent assembly-controlled operation |
 | [DEC-013](DEC-013-networked-llama-server.md) | Authenticated networked `llama.cpp` deployment server |
 | [DEC-014](DEC-014-unified-mission-workflow.md) | Unified mission execution with pre-operation AI advisory |
+| [DEC-015](DEC-015-ratatui-interface.md) | Ratatui as the primary interactive interface and roadmap reset |

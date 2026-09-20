@@ -14,38 +14,49 @@ cargo test --workspace
 
 Target-facing changes additionally require the QNX cross-build and relevant Raspberry Pi 5 tests described in `docs/development.md`. An unavailable target check is recorded as unavailable, never passed.
 
-## Firmware validation pipeline
+## Implemented laboratory pipeline
 
-1. Parse a bounded proposal and verify scenario identity/hash.
-2. Assemble with line-specific diagnostics and produce canonical bytes.
-3. Decode every reachable instruction and validate entry point/control-flow targets.
-4. Validate memory regions, manifest capabilities, program/stack bounds, and cycle/deadline budgets.
-5. Run opcode vectors, regressions, scenario cases, and fault cases.
-6. Explore a bounded world/input state space with canonical-state deduplication.
-7. Produce a concrete counterexample for rejection when possible.
-8. Run the candidate in shadow against mirrored inputs and compare outputs, state, and cycles.
-9. Emit deterministic reason codes and evidence bound to firmware and compiled scenario hashes.
-10. Let the separate deployment gate decide whether activation is permitted.
+1. Parse bounded source and assemble it with line-specific diagnostics.
+2. Produce canonical instruction bytes and decode each executed instruction.
+3. Validate memory mappings, manifest capabilities, entry point, stack bounds,
+   and a positive virtual-cycle budget.
+4. Run the VM directly or pair the firmware with a compiled mission document.
+5. For missions, update the deterministic software twin and pass each firmware
+   request through the typed output-decision API.
+6. Record steps, cycles, state changes, requests, applied outputs, rules,
+   faults, transitions, halt, and traps for display.
+
+This pipeline does not claim static control-flow validation, bounded
+state-space exploration, replayable traces, shadow execution, deployment
+approval, or activation lifecycle management.
 
 ## Test classes
 
-- **Unit:** encoding, arithmetic edges, traps, permissions, diagnostics, schema/canonicalization, address allocation, policy truth tables, safe-state resolution, dynamics, and lifecycle rules.
-- **Property:** decode robustness, valid encode/decode round trips, memory bounds, replay determinism, policy monotonicity, canonical compilation, stable allocation, and complete emergency coverage where dependency support permits.
-- **Integration:** assemble/run, compile scenarios, dynamically add system elements through the editor API, reject invalid scenarios, validate safe/unsafe firmware, replay traces, verify hashes, compare shadow output, parse advisory checker findings, redact test credentials, and exercise lifecycle transitions.
-- **QNX target:** process startup/IPC, timing observations, priority relationships, controller continuity when nonessential services die, watchdog behavior, and last-known-good rollback.
-- **Fault injection:** illegal opcode, protected write, infinite loop, corruption, stale heartbeat, pressure anomalies, stuck feedback, electrical/continuity/clearance loss, unsafe update timing, and process failure.
+- **Unit:** encoding, arithmetic edges, traps, permissions, diagnostics,
+  schema/canonicalization, address allocation, policy truth tables, safe-state
+  resolution, dynamics, and advisory response validation.
+- **Robustness:** arbitrary decode input, encode/decode round trips, memory
+  bounds, canonical compilation, stable allocation, bounded parsers, and
+  deterministic repeated mission inputs.
+- **Integration:** assemble/run, compile scenarios, reject invalid scenarios,
+  execute tank and rocket missions, apply output decisions, parse advisory
+  findings, and redact credentials.
+- **TUI:** reducer/session tests, Ratatui buffer snapshots for wide and compact
+  layouts, bounded scrolling/content, terminal restoration, and provider
+  failure without event-loop or runner failure.
+- **QNX target:** existing CLI smoke checks plus TUI launch, keyboard input,
+  resize, normal exit, and terminal restoration through an allocated console
+  or SSH pseudo-terminal.
 
-## Trace and replay
-
-A versioned execution trace must reconstruct starting machine/world state, input, instruction address and decoding, register/`HI`/`LO`/`PC` changes, memory and output writes, cycle count, traps, invariant evaluations, and ending state. Canonical state hashes exclude timestamps, PIDs, host memory addresses, and map iteration order.
-
-Replay passes only when the same versioned inputs and artifacts produce the same event sequence and final canonical state. A trace is diagnostic evidence, not proof that untraced behavior is safe.
-
-## Advisory AI checker evaluation
+## Advisory AI checker validation
 
 AI evaluation is separate from firmware validation and cannot affect deployment evidence. Versioned fixtures pair a bounded state snapshot with a written rule set and expected relevant rule IDs. Cases include clear violations, nominal state, insufficient information, stale hashes, prompt injection in string fields, malformed and oversized output, timeout, refusal, and backend loss.
 
-The OpenAI test backend and hackathon `llama.cpp` backend consume the same local request and response types. Evaluation records parse success, rule-ID validity, cited-field validity, expected finding recall, false positives, `unknown` handling, latency, backend/model identity, prompt-contract version, and rule/snapshot hashes. No test assumes model output is deterministic, and no score is accepted as safety evidence. The local backend must also pass an offline startup and failure-isolation test with remote-provider fallback disabled.
+The OpenAI test backend and hackathon `llama.cpp` backend consume the same
+local request and response types. Deterministic tests validate rule IDs, cited
+fields, hashes, limits, refusal/error mapping, and authority isolation. Live
+backend parity metrics are outside the current roadmap. No test assumes model
+output is deterministic, and no score is accepted as safety evidence.
 
 ## Current validation record
 
@@ -57,8 +68,9 @@ operation family; signed and unsigned arithmetic; branch, jump, and link
 behavior; reset and `R0`; sparse mappings, permissions, capabilities, and stack
 bounds; stable trap classes and precedence; atomic fault behavior; full-cost
 cycle-budget refusal; externally driven telemetry/feedback updates that cannot
-alter actuator or protected slots; and end-to-end countdown execution. The
-scenario tests cover strict source rejection, typed schema/semantic/coverage
+alter actuator or protected slots; and end-to-end standalone sample-analysis
+execution. The scenario tests cover strict source rejection, typed
+schema/semantic/coverage
 errors, stable canonical hashes, presentation separation, clean and stable MMIO
 allocation, reproducible symbols, every dynamic operation and fault family,
 one-shot faults, priority, deterministic phase progression, and firmware access
@@ -105,9 +117,11 @@ The tank proposed-action fixture is hash-valid and represents both valves open;
 its written rules bind that proposal and current pressure for a second mission
 type. Upload packaging includes both files.
 
-The host `run examples/countdown.asm 9` case halts after nine steps and cycles
-with `PC=0x00000014` and `R1=0`. Budget 8 is rejected before `HALT` with exit
-code 2. A prior clean QNX SDP 8.0 Build 14 workspace release cross-build for
+The host `run examples/sample-analysis.asm 256` case halts after 91 instructions and
+112 cycles with `PC=0x00000070`, `HI=1`, `LO=13`, sum `R2=66`, maximum
+`R3=25`, threshold count `R7=3`, average `R8=13`, remainder `R9=1`, and a
+restored stack pointer. Budget 111 is rejected before `HALT` with exit code 2.
+A prior clean QNX SDP 8.0 Build 14 workspace release cross-build for
 `aarch64-unknown-nto-qnx800` produced an AArch64 QNX PIE with SHA-256
 `50a2c8546e1f256f85d7429b7f1b3e68409559fbc13cdcab6b88cb6824146aae`.
 The current tank hardware manifest compiles to bundle hash
@@ -143,3 +157,40 @@ The request-shape regression test verifies that the schema is present in both
 the nested OpenAI-compatible `response_format.json_schema.schema` location and
 llama.cpp's top-level `json_schema` location. The previously used direct
 `response_format.schema` field is absent.
+
+On 2026-09-20, the TUI implementation added Ratatui 0.29.0 with default
+features disabled and a safe ANSI/`stty` backend. App tests cover all four
+views, the compact layout, source save conflicts, VM register deltas, typed
+mission frames, key decoding, ANSI output, and rejection of cell control
+characters. A real host pseudo-terminal rendered the Assemble screen, accepted
+`q`, exited zero, and restored the alternate screen, cursor, and shell mode.
+The QNX-modified Rust 1.85.1 compiler completed the app target check and linked
+an AArch64 QNX 8.0 release executable. The linked artifact and fixtures were
+prepared for upload with SHA-256
+`6f5b7807f4ab4b3f131b0f1f10857313670440bf995b7a68c2e063235f0da324`.
+The exact artifact ran on the Raspberry Pi 5 QNX 8.0.0 image dated
+`2026/06/05-16:21:14EDT`. An allocated SSH terminal rendered Assemble, Run, and
+Mission; accepted batched navigation and stepping; completed the standalone
+program and 19-frame rocket mission; and redrew after an 80x24 to 70x18
+terminal change.
+`q` emitted cursor/alternate-screen restoration and closed the SSH session
+normally. The deployed SHA-256 matched the uploaded provenance file, and the
+target CLI successfully checked the deployed standalone example.
+The final default-feature host lane contains 81 passing tests: 12 advisory, 15
+app/TUI, 31 core, 7 safety, and 16 scenario tests, plus empty doc-test suites.
+The TUI advisory path was subsequently checked with `S32_AI_RULES_PATH`
+absent: it resolved the displayed rule set and deployment config from the demo
+tree, reached the provider, and reported the expected transport failure rather
+than a missing-configuration error. Repeated requests reuse the validated
+configuration while retaining environment-variable precedence.
+The same unset-override smoke passed on the deployed QNX artifact: the
+Advisory view displayed the rocket rule hash and advanced to `provider request
+running` instead of emitting the former missing-rule error.
+
+The renamed `examples/sample-analysis.asm` replacement passed the full 81-test
+host lane and `cargo +qnx800 check --workspace --target
+aarch64-unknown-nto-qnx800 --release`. A noninteractive copy to the existing
+QNX demo tree was rejected by target authentication, so execution of this
+replacement source on the Raspberry Pi remains unavailable until the next
+authenticated target session. The already validated VM binary did not change;
+only the fixture, tests, and documentation changed in this task.

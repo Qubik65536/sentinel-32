@@ -45,7 +45,7 @@ The root object has exactly these fields:
 | `safe_states` | yes | defaults and profile layers |
 | `dynamics` | yes | deterministic tick-update rules |
 | `faults` | no | named deterministic fault definitions |
-| `layout` | no | presentation-only dashboard data |
+| `layout` | no | presentation-only UI layout data |
 
 All domain collections are maps keyed by ID; entries do not repeat their ID.
 `types` maps IDs to `{variants: [id, ...]}`. `phases` is

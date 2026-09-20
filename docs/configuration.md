@@ -13,7 +13,7 @@ does not depend on the login directory.
 | Name | Purpose | Initial policy |
 |---|---|---|
 | `S32_AI_CHECK_MODE` | `llama_cpp`, `openai_test`, `fixture`, or `disabled` | Tracked default selects `llama_cpp`; deployment rejects every other mode |
-| `S32_AI_RULES_PATH` | Versioned written rule-set input for the mission under review | Required when checking is enabled; content is bounded and its hash is recorded with every finding; each mission may select its own rule set |
+| `S32_AI_RULES_PATH` | Versioned written rule-set input for the mission under review | Required by advisory CLI commands; optional TUI override because the TUI resolves its matching default rocket rules from the demo tree; content is bounded and its hash is recorded with every finding |
 | `S32_AI_CHECK_TIMEOUT_MS` | Advisory check deadline | Positive bounded integer; timeout produces checker-unavailable status and never delays control |
 | `S32_AI_MAX_SNAPSHOT_BYTES` | Serialized state-snapshot ceiling | Positive integer no greater than 65536; oversize snapshots are rejected before provider access |
 | `S32_AI_MAX_OUTPUT_BYTES` | Structured finding response ceiling | Positive integer no greater than 65536; oversize responses are rejected |
@@ -25,6 +25,9 @@ does not depend on the login directory.
 | `S32_AI_MAX_OUTPUT_TOKENS` | Provider generation limit | Positive integer, default 2048 and maximum 8192 |
 | `S32_AI_FIXTURE_RESPONSE_PATH` | Deterministic response fixture | Required only in `fixture` mode |
 | `S32_AI_DIAGNOSTIC_RESPONSE_PATH` | Optional raw bounded `llama.cpp` response capture | Disabled by default; use only for explicit diagnosis, protect the file as operator data, and unset it afterward; the client does not add the API key to the capture |
+| `S32_DEMO_ROOT` | TUI root containing the deployed `examples/` tree | Optional; QNX demo value is `/data/home/qnxuser/sentinel-32`; explicit source paths take precedence |
+| `S32_TUI_SNAPSHOT_PATH` | Snapshot displayed and checked by the Advisory view | Optional; defaults to the rocket advisory fixture resolved beneath the demo root |
+| `S32_TUI_AI_PROFILE` | Advisory profile used by the TUI worker | Defaults to `deployment`; `development` requires the feature-gated test adapter |
 | `OPENAI_API_KEY` | OpenAI test credential | No default; test adapter only; never logged, committed, or sent over Sentinel IPC |
 | `S32_OPENAI_TEST_MODEL` | Pinned checker test model | Required only in `openai_test` mode and recorded in test results |
 | `S32_CONTROL_PERIOD_US` | Controller period | Positive integer; target value requires QNX measurement |

@@ -28,6 +28,8 @@ const LAB_STACK_SIZE: usize = 64 * 1024;
 const TANK_PRESSURE_STEP: i32 = 10_000;
 const MAX_AI_CONFIG_BYTES: usize = 16 * 1024;
 
+mod tui;
+
 static AI_CONFIG: OnceLock<BTreeMap<String, String>> = OnceLock::new();
 
 struct FirmwareRun {
@@ -68,6 +70,31 @@ struct RocketIssue {
     rule: String,
     severity: Severity,
     message: String,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct MissionViewFrame {
+    pub tick: u64,
+    pub phase: String,
+    pub pc: String,
+    pub steps: u64,
+    pub cycles: u64,
+    pub telemetry: Vec<(String, String)>,
+    pub requested: Vec<(String, String)>,
+    pub applied: Vec<(String, String)>,
+    pub rules: Vec<String>,
+    pub faults: Vec<String>,
+    pub hold: bool,
+    pub abort: bool,
+    pub supervisor: String,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct MissionViewSnapshot {
+    pub mission: String,
+    pub schema: String,
+    pub summary: String,
+    pub frames: Vec<MissionViewFrame>,
 }
 
 fn parse_word(value: &str) -> Result<u32, String> {
@@ -158,6 +185,8 @@ fn run() -> Result<(), String> {
             let stdout = io::stdout();
             step_assembly(assembly, cycle_budget, stdin.lock(), stdout.lock())
         }
+        [command] if command == "tui" => tui::run_tui(None),
+        [command, source] if command == "tui" => tui::run_tui(Some(source)),
         [command, source] if command == "scenario-check" => {
             let source = read_text(source)?;
             let compilation = compile(&source, AllocationMode::Clean)
@@ -254,7 +283,7 @@ fn run() -> Result<(), String> {
             Ok(())
         }
         _ => Err(
-            "usage: sentinel-app [decode <word> | check <source.asm> | assemble <source.asm> [output.bin] | run <source.asm> <cycle-budget> | step <source.asm> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | mission-run <mission.yaml> <firmware.asm> <cycle-budget> | mission-advice <deployment|development> <snapshot.json> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks> | ai-health <deployment|development> | ai-check <development> <snapshot.json>]"
+            "usage: sentinel-app [tui [source.asm] | decode <word> | check <source.asm> | assemble <source.asm> [output.bin] | run <source.asm> <cycle-budget> | step <source.asm> <cycle-budget> | hardware-check <hardware.yaml> | hardware-compile <hardware.yaml> <bundle.json> <symbols.inc> | mission-run <mission.yaml> <firmware.asm> <cycle-budget> | mission-advice <deployment|development> <snapshot.json> | scenario-check <source.yaml> | scenario-compile <source.yaml> <bundle.json> <symbols.inc> | scenario-tick <source.yaml> <ticks> | ai-health <deployment|development> | ai-check <development> <snapshot.json>]"
                 .to_owned(),
         ),
     }
@@ -267,6 +296,152 @@ fn run_mission(mission_path: &str, firmware_path: &str, cycle_budget: u64) -> Re
         "sentinel.scenario/v0" => run_rocket_firmware(mission_path, firmware_path, cycle_budget),
         schema => Err(format!("unsupported mission schema `{schema}`")),
     }
+}
+
+pub(crate) fn execute_mission_view(
+    mission_path: &str,
+    firmware_path: &str,
+    cycle_budget: u64,
+) -> Result<MissionViewSnapshot, String> {
+    let source = read_text(mission_path)?;
+    match mission_schema(&source)? {
+        "sentinel.hardware/v0" => {
+            let compilation = compile_hardware(&source).map_err(|error| error.to_string())?;
+            let symbols = compilation
+                .bundle
+                .mmio
+                .iter()
+                .map(|entry| (mmio_symbol(&entry.qualified_id), entry.address))
+                .collect::<BTreeMap<_, _>>();
+            let firmware_source = read_text(firmware_path)?;
+            let assembly =
+                assemble_with_symbols(&firmware_source, 0, &symbols).map_err(|diagnostics| {
+                    render_diagnostics(Path::new(firmware_path), &diagnostics)
+                })?;
+            let runtime = Runtime::new(compilation.bundle.clone());
+            let run = execute_firmware_tick(
+                &assembly,
+                &compilation.bundle,
+                &runtime.state().values,
+                cycle_budget,
+            )?;
+            let frame_count = run.tank_seconds.len();
+            let frames = run
+                .tank_seconds
+                .into_iter()
+                .enumerate()
+                .map(|(index, second)| MissionViewFrame {
+                    tick: index as u64 + 1,
+                    phase: "tank_sequence".to_owned(),
+                    pc: "persistent firmware".to_owned(),
+                    steps: run.steps,
+                    cycles: run.cycles,
+                    telemetry: display_values(&second.next_readings),
+                    requested: display_values(&second.requests),
+                    applied: second
+                        .actions
+                        .iter()
+                        .map(|(key, value)| (key.clone(), format_scalar(value)))
+                        .collect(),
+                    rules: Vec::new(),
+                    faults: Vec::new(),
+                    hold: false,
+                    abort: false,
+                    supervisor: "none".to_owned(),
+                })
+                .collect();
+            Ok(MissionViewSnapshot {
+                mission: compilation.bundle.scenario_id,
+                schema: "sentinel.hardware/v0".to_owned(),
+                summary: format!(
+                    "halted: {} steps, {} cycles, {} seconds, final {}",
+                    run.steps,
+                    run.cycles,
+                    frame_count,
+                    format_values(&run.final_requests)
+                ),
+                frames,
+            })
+        }
+        "sentinel.scenario/v0" => {
+            let compilation =
+                compile(&source, AllocationMode::Clean).map_err(|error| error.to_string())?;
+            let symbols = compilation
+                .bundle
+                .mmio
+                .iter()
+                .map(|entry| (mmio_symbol(&entry.qualified_id), entry.address))
+                .collect::<BTreeMap<_, _>>();
+            let firmware_source = read_text(firmware_path)?;
+            let assembly =
+                assemble_with_symbols(&firmware_source, 0, &symbols).map_err(|diagnostics| {
+                    render_diagnostics(Path::new(firmware_path), &diagnostics)
+                })?;
+            let run = execute_rocket_firmware(&assembly, compilation.bundle.clone(), cycle_budget)?;
+            let frames = run
+                .ticks
+                .iter()
+                .map(|tick| MissionViewFrame {
+                    tick: tick.result.tick,
+                    phase: format!(
+                        "{} -> {}",
+                        tick.result.phase_before, tick.result.phase_after
+                    ),
+                    pc: format!(
+                        "0x{:08X}..0x{:08X}",
+                        tick.frame_first_pc, tick.frame_last_pc
+                    ),
+                    steps: tick.frame_steps,
+                    cycles: tick.frame_cycles,
+                    telemetry: tick
+                        .result
+                        .changed_values
+                        .iter()
+                        .map(|(key, value)| (key.clone(), format_scalar(value)))
+                        .collect(),
+                    requested: display_values(&tick.firmware_requests),
+                    applied: display_values(&tick.applied_requests),
+                    rules: tick
+                        .issues
+                        .iter()
+                        .map(|issue| {
+                            format!(
+                                "{} [{}] {}",
+                                issue.rule,
+                                severity_name(issue.severity),
+                                issue.message
+                            )
+                        })
+                        .collect(),
+                    faults: tick.result.active_faults.clone(),
+                    hold: tick.result.hold,
+                    abort: tick.result.abort_latched,
+                    supervisor: tick.transition.clone().unwrap_or_else(|| "none".to_owned()),
+                })
+                .collect();
+            Ok(MissionViewSnapshot {
+                mission: compilation.bundle.scenario_id,
+                schema: "sentinel.scenario/v0".to_owned(),
+                summary: format!(
+                    "halted: {} steps, {} cycles, {} ticks, phase {}, final {}",
+                    run.steps,
+                    run.cycles,
+                    run.ticks.len(),
+                    run.final_phase,
+                    format_values(&run.final_requests)
+                ),
+                frames,
+            })
+        }
+        schema => Err(format!("unsupported mission schema `{schema}`")),
+    }
+}
+
+fn display_values(values: &BTreeMap<String, ScalarValue>) -> Vec<(String, String)> {
+    values
+        .iter()
+        .map(|(key, value)| (key.clone(), format_scalar(value)))
+        .collect()
 }
 
 fn mission_schema(source: &str) -> Result<&str, String> {
@@ -301,13 +476,37 @@ fn run_ai_health(profile: &str) -> Result<(), String> {
 }
 
 fn run_ai_check(profile: &str, snapshot_path: &str) -> Result<(), String> {
+    let (_request, response) = execute_advisory_check(profile, snapshot_path)?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&response)
+            .map_err(|error| format!("cannot encode advisory response: {error}"))?
+    );
+    Ok(())
+}
+
+fn execute_advisory_check(
+    profile: &str,
+    snapshot_path: &str,
+) -> Result<(CheckRequest, sentinel_ai_check::CheckResponse), String> {
+    execute_advisory_check_with_rules(profile, snapshot_path, None)
+}
+
+pub(crate) fn execute_advisory_check_with_rules(
+    profile: &str,
+    snapshot_path: &str,
+    rules_path: Option<&Path>,
+) -> Result<(CheckRequest, sentinel_ai_check::CheckResponse), String> {
     let profile = parse_deployment_profile(profile)?;
     let limits = ai_limits()?;
     let snapshot_bytes = fs::read(snapshot_path)
         .map_err(|error| format!("cannot read `{snapshot_path}`: {error}"))?;
-    let rules_path = required_env("S32_AI_RULES_PATH")?;
+    let rules_path = match rules_path {
+        Some(path) => path.to_path_buf(),
+        None => Path::new(&required_env("S32_AI_RULES_PATH")?).to_path_buf(),
+    };
     let rule_bytes = fs::read(&rules_path)
-        .map_err(|error| format!("cannot read configured AI rules: {error}"))?;
+        .map_err(|error| format!("cannot read AI rules `{}`: {error}", rules_path.display()))?;
     let request = CheckRequest {
         snapshot: parse_and_validate_snapshot(&snapshot_bytes, limits)
             .map_err(|error| error.to_string())?,
@@ -334,12 +533,7 @@ fn run_ai_check(profile: &str, snapshot_path: &str) -> Result<(), String> {
         "disabled" => return Err("advisory checker is disabled".to_owned()),
         _ => return Err("invalid S32_AI_CHECK_MODE".to_owned()),
     };
-    println!(
-        "{}",
-        serde_json::to_string_pretty(&response)
-            .map_err(|error| format!("cannot encode advisory response: {error}"))?
-    );
-    Ok(())
+    Ok((request, response))
 }
 
 fn parse_deployment_profile(value: &str) -> Result<DeploymentProfile, String> {
@@ -454,12 +648,22 @@ fn configured_value(name: &str) -> Result<Option<String>, String> {
 }
 
 fn load_ai_config() -> Result<(), String> {
-    let default_path =
-        env::var("S32_AI_CONFIG_PATH").unwrap_or_else(|_| "config/ai-llama-default.env".to_owned());
+    load_ai_config_with_default(Path::new("config/ai-llama-default.env"))
+}
+
+pub(crate) fn load_ai_config_with_default(default_path: &Path) -> Result<(), String> {
+    if AI_CONFIG.get().is_some() {
+        return Ok(());
+    }
+    let explicit_path = env::var("S32_AI_CONFIG_PATH").ok();
+    let path = explicit_path
+        .as_deref()
+        .map(Path::new)
+        .unwrap_or(default_path);
     let mut config = BTreeMap::new();
     load_ai_config_file(
-        &default_path,
-        env::var_os("S32_AI_CONFIG_PATH").is_some(),
+        &path.to_string_lossy(),
+        explicit_path.is_some(),
         &mut config,
     )?;
     AI_CONFIG

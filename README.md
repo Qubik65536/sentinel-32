@@ -4,7 +4,7 @@ Sentinel-32 is a software-only safety laboratory for embedded firmware. It will 
 
 AI has one narrow, advisory role: compare a bounded snapshot of current state with a versioned set of written safety rules and report possible violations for an operator. OpenAI is used only to test that checker; the hackathon deployment uses an authenticated `llama.cpp` deployment server. AI findings never approve firmware, replace deterministic invariants, or control outputs.
 
-This is a safety-oriented prototype and educational demonstration. It is not certified control software, bounded exploration is not formal proof, observed timing is not WCET, and all launch values are normalized simulation values.
+This is a safety-oriented prototype and educational demonstration. It is not certified control software, its deterministic tests are not formal proof, observed timing is not WCET, and all launch values are normalized simulation values.
 
 ## Current status
 
@@ -26,11 +26,12 @@ validates the bounded advisory snapshot, written-rule, and finding contract;
 it has no output or activation API. The app exposes the VM and scenario
 workflows.
 
-The QNX SDP 8.0 Build 14 toolchain cross-builds the workspace for
-`aarch64-unknown-nto-qnx800`, and the operator reports successful Raspberry Pi
-5 execution. `BUILD-001` remains open only until exact target-side commands,
-image version, output, and exit status are captured. See
-[development setup](docs/development.md) and the [work plan](.agent/plan.md).
+`sentinel-app tui` is a Ratatui interface for visually assembling source,
+inspecting machine execution, running missions, and reviewing advisory
+findings. It uses a small safe ANSI backend that cross-builds for QNX 8.0 and
+works in an allocated SSH terminal. Existing CLI workflows remain available.
+See the [terminal interface guide](docs/tui-user-guide.md),
+[development setup](docs/development.md), and [work plan](.agent/plan.md).
 
 ## Host checks
 
@@ -39,6 +40,17 @@ cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
+
+Open the visual laboratory with:
+
+```sh
+cargo run -p sentinel-app -- tui examples/sample-analysis.asm
+```
+
+Use keys `1` through `4` for Assemble, Run, Mission, and Advisory, and `?` for
+contextual help. On QNX, connect with `ssh -t`, set
+`S32_DEMO_ROOT=/data/home/qnxuser/sentinel-32`, and run the same `tui` command
+from the deployed `release` directory.
 
 Decode a word from the accepted S32 ISA with:
 
@@ -49,11 +61,11 @@ cargo run -p sentinel-app -- decode 0x00221820
 Check, inspect, or emit the included assembly example with:
 
 ```sh
-cargo run -p sentinel-app -- check examples/countdown.asm
-cargo run -p sentinel-app -- assemble examples/countdown.asm
-cargo run -p sentinel-app -- assemble examples/countdown.asm countdown.bin
-cargo run -p sentinel-app -- run examples/countdown.asm 9
-cargo run -p sentinel-app -- step examples/countdown.asm 9
+cargo run -p sentinel-app -- check examples/sample-analysis.asm
+cargo run -p sentinel-app -- assemble examples/sample-analysis.asm
+cargo run -p sentinel-app -- assemble examples/sample-analysis.asm sample-analysis.bin
+cargo run -p sentinel-app -- run examples/sample-analysis.asm 256
+cargo run -p sentinel-app -- step examples/sample-analysis.asm 256
 ```
 
 The assembler supports all v0 instructions, labels, comments, `sp`/`fp`/`ra`,
@@ -65,8 +77,11 @@ examples use fenced `asm` blocks.
 
 The `run` command requires a positive virtual-cycle budget. Its lab manifest
 maps the assembled program read/execute and provides one 64 KiB read/write
-stack capability; it grants no data or MMIO capabilities. The countdown should
-halt after nine instructions with nine cycles, `PC=0x00000014`, and `R1=0`.
+stack capability; it grants no data or MMIO capabilities. The sample-analysis
+example builds a five-word stack buffer, calls a function, and halts after 91
+instructions and 112 cycles with `PC=0x00000070`. Its result registers contain
+sum `R2=66`, maximum `R3=25`, threshold count `R7=3`, average `R8=13`, and
+remainder `R9=1`; `SP` is restored to `0x20010000`.
 The interactive `step` command uses the same manifest and cycle budget. Enter
 or `s` executes one instruction, `s N` executes a bounded group, `r` displays
 registers, `c` continues, `h` shows help, and `q` exits without executing more
@@ -136,7 +151,11 @@ Start with [project scope](docs/project.md), [architecture](docs/architecture.md
 must follow [AGENTS.md](AGENTS.md) and select work from
 [.agent/plan.md](.agent/plan.md).
 
-The [QNX command-line demo](docs/demo.md) gives the exact target commands and
-the visible result of each step. The [advisory AI user guide](docs/ai-user-guide.md)
-adds deployment-server setup, configuration, OpenAI development checks, and
-troubleshooting.
+The implemented key map and host/QNX operation are in the
+[terminal interface guide](docs/tui-user-guide.md). The layouts, event flow,
+and terminal-safety design are in the [Ratatui interface design](docs/tui.md).
+
+The [QNX visual and command-line demo](docs/demo.md) gives the exact target
+commands and the visible result of each step. The
+[advisory AI user guide](docs/ai-user-guide.md) adds deployment-server setup,
+configuration, OpenAI development checks, and troubleshooting.

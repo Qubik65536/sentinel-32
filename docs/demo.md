@@ -1,4 +1,146 @@
-# QNX command-line demonstration
+# QNX visual and command-line demonstration
+
+The Ratatui interface is the primary interactive demonstration. It runs in a
+normal QNX console or an SSH pseudo-terminal and presents the assembler,
+instruction runner, deterministic missions, and authority-free advisory review
+without replacing their typed runtime boundaries.
+
+## Visual TUI demonstration
+
+Use two SSH terminals. Allocate a pseudo-terminal with `-t`; the TUI uses raw
+input and restores the terminal when it exits.
+
+### 1. Prepare the advisory service
+
+In the first SSH terminal, start `llama-server` with the command in
+[Start the local AI server](#1-start-the-local-ai-server). Wait until the model
+has loaded and the server is listening on port 8080. Leave it running.
+
+The Mission view does not need this server. Only the Advisory view uses it.
+
+### 2. Configure and start the TUI
+
+In the second SSH terminal, configure the rocket advisory inputs **before**
+starting the TUI:
+
+```sh
+ssh -t qnxuser@qnxpi59.local
+cd /data/home/qnxuser/sentinel-32/release
+
+export TERM=xterm-256color
+export S32_DEMO_ROOT=/data/home/qnxuser/sentinel-32
+export S32_AI_CONFIG_PATH=/data/home/qnxuser/sentinel-32/config/ai-llama-default.env
+export S32_AI_CHECK_TIMEOUT_MS=300000
+export S32_AI_MAX_OUTPUT_TOKENS=512
+export S32_AI_RULES_PATH=/data/home/qnxuser/sentinel-32/examples/ai/rocket-written-rules.json
+export S32_TUI_SNAPSHOT_PATH=/data/home/qnxuser/sentinel-32/examples/ai/rocket-pressure-snapshot.json
+export S32_TUI_AI_PROFILE=deployment
+
+./sentinel-app tui /data/home/qnxuser/sentinel-32/examples/sample-analysis.asm
+```
+
+The exports make the recorded inputs explicit. The current TUI can also resolve
+the default config, rocket snapshot, and rocket rules from `S32_DEMO_ROOT` when
+`S32_AI_CONFIG_PATH` and `S32_AI_RULES_PATH` are unset. If it reports that
+`S32_AI_RULES_PATH` is missing, the deployed executable predates this behavior.
+
+**Shows:** the Assemble tab with numbered source on the left and the entry
+address, byte count, encoded words, and decoded instructions on the right. The
+status bar reports that the source assembled and the runner was reset. Press
+`?` at any point for the complete in-application key reference.
+
+### 3. Demo the assembler and instruction runner
+
+1. In Assemble, press `e`, change a character, then press `Esc`. The path gains
+   a `*` dirty marker. Press `a` to assemble the in-memory source. Press `l` to
+   discard the edit by reloading the file. `w` is the only save action; this
+   demo does not require saving.
+2. Press `2` for Run. Press `s` repeatedly to watch stack allocation, `li`
+   expansion, and the first memory write. `n` executes up to ten bounded
+   instructions; use it to reach the `jal` and then step into the analysis
+   loop. `Space` starts or pauses timed execution. The run ends halted after
+   91 instructions and 112 cycles with sum `R02=66`, maximum `R03=25`,
+   threshold count `R07=3`, average `R08=13`, remainder `R09=1`,
+   `HI=1`, `LO=13`, restored `R29=0x20010000`, and `PC=0x00000070`.
+   Press `r` to reset it.
+
+### 4. Demo the rocket mission
+
+1. Press `3`. The header initially says `selected=rocket`.
+2. Press `m`. The TUI executes the bounded mission and loads 19 recorded
+   frames. It does not call the AI provider.
+3. Inspect the first frames with right arrow or `j`. The Firmware/phase pane
+   shows assembly PCs, instruction/cycle counts, phase, supervisor transition,
+   and `hold`/`abort`. Telemetry/feedback shows simulated values. Requests and
+   applied outputs are deliberately separate, and the rules pane shows
+   `valve_feedback_mismatch` holds during one-tick feedback delays.
+4. Press `Space` to play the frames, then press it again to pause. Use left
+   arrow or `k` to move backward and `r` to rewind.
+5. Move to the last frame. The mission summary reports 248 firmware steps, 391
+   virtual cycles, 19 ticks, and final phase `complete`. These are simulated
+   deterministic counts, not physical timing or WCET.
+
+### 5. Demo the rocket advisory
+
+1. Press `4`. The left pane identifies the prepared rocket snapshot and
+   written-rule hashes and displays its bounded fields, including fuel pressure
+   `95000` and `range_clear=false`.
+2. Press `a` or `Enter` once. The right pane changes to
+   `provider request running` with elapsed time. The local model can take tens
+   of seconds; pressing `a` again reports that a request is already running.
+3. While it is pending, press `3` and inspect or replay Mission. This
+   demonstrates that the provider worker does not freeze deterministic views.
+   Press `4` to return to the request.
+4. A successful validated response shows the `llama.cpp` backend/model and one
+   rule-linked result for each written rule. It should report possible
+   violations for the supplied high fuel pressure and uncleared range. Exact
+   rationale wording is model-generated and may vary.
+5. Point out the permanent
+   `ADVISORY ONLY - authority=none - operator and deterministic policy own all decisions`
+   banner. The prepared snapshot is advisory input; it is not mission
+   telemetry, and its `95000` value does not enter or alter the rocket run.
+
+### 6. Demo the tank mission and advisory
+
+The Advisory view reads its snapshot path when the TUI starts. Press `q`, set
+the tank inputs, and relaunch:
+
+```sh
+export S32_AI_RULES_PATH=/data/home/qnxuser/sentinel-32/examples/ai/tank-written-rules.json
+export S32_TUI_SNAPSHOT_PATH=/data/home/qnxuser/sentinel-32/examples/ai/tank-proposed-action-snapshot.json
+
+./sentinel-app tui /data/home/qnxuser/sentinel-32/examples/sample-analysis.asm
+```
+
+1. Press `4`, then `a`. A successful response should identify the prepared
+   proposal to open both inlet and outlet valves. The proposal is displayed as
+   untrusted advisory data and cannot write either actuator.
+2. Press `3`, then `t`. The header changes to `selected=tank`.
+3. Press `m`. Inspect or play the 21 simulated seconds. The persistent assembly
+   controller fills to `50000`, holds for ten simulated seconds, unloads to
+   zero, closes both valves, and halts after 203 instructions and 257 virtual
+   cycles.
+4. Compare the Advisory proposal with the Mission panes: the proposal does not
+   appear as a firmware request or applied output. Mission behavior comes from
+   the assembly program and deterministic output path.
+
+### 7. Demo AI failure isolation
+
+Stop `llama-server` in the first terminal with `Ctrl-C`. In the TUI, press `4`
+and then `a`. The provider pane reports `UNAVAILABLE` after the configured
+connection failure or timeout, while the authority banner remains unchanged.
+Press `3`, select rocket or tank with `t`, and press `m`; the deterministic
+mission still executes and can be inspected normally.
+
+Press `q` to exit. The alternate screen closes, the cursor returns, and the
+shell terminal settings are restored. Clear the overrides with the commands in
+[Clear the demo overrides](#12-clear-the-demo-overrides).
+
+The full key map, source-edit behavior, QNX terminal requirements, advisory
+variables, and recovery command are in the
+[terminal interface guide](tui-user-guide.md).
+
+## Scriptable CLI demonstration
 
 Run these commands after signing in to the QNX target. The deployed tree is
 `/data/home/qnxuser/sentinel-32`, and every application command starts in its
@@ -44,69 +186,78 @@ path and give the small local model enough time to answer.
 ## 3. Display, assemble, and run pure S32 assembly
 
 ```sh
-cat /data/home/qnxuser/sentinel-32/examples/countdown.asm
+cat /data/home/qnxuser/sentinel-32/examples/sample-analysis.asm
 ```
 
-**Shows:** a standalone S32 program with an entry label, the `li` assembler
-pseudo-instruction, a decrementing loop, a conditional branch, and `halt`. It
-does not use a scenario, hardware inventory, AI service, or MMIO.
+**Shows:** a standalone S32 program that creates an array on the mapped stack,
+calls an analysis function, loops through word loads, computes sum/maximum and
+an inclusive threshold count, uses `DIVU` plus `MFLO`/`MFHI` for an integer
+average and remainder, restores the stack, and halts. It does not use a
+scenario, hardware inventory, AI service, or MMIO.
 
 ```sh
 ./sentinel-app check \
-  /data/home/qnxuser/sentinel-32/examples/countdown.asm
+  /data/home/qnxuser/sentinel-32/examples/sample-analysis.asm
 ```
 
 **Shows:** the assembler validates the source and reports its encoded size and
 entry address:
 
 ```text
-valid: 20 bytes, entry=0x00000000
+valid: 188 bytes, entry=0x00000000
 ```
 
 ```sh
 ./sentinel-app assemble \
-  /data/home/qnxuser/sentinel-32/examples/countdown.asm
+  /data/home/qnxuser/sentinel-32/examples/sample-analysis.asm
 ```
 
-**Shows:** the five real 32-bit instructions produced by the assembler. The
-single `li r1, 3` source line expands to `lui` and `ori`:
+**Shows:** 47 real encoded words. Pseudo-instructions are expanded before
+encoding: each `li` becomes `lui` plus `ori`, `move` becomes `addu`, `b`
+becomes `beq`, and `ret` becomes `jr`. Representative output is:
 
 ```text
-00000000: 3C010000
-00000004: 34210003
-00000008: 2421FFFF
-0000000C: 1420FFFE
-00000010: F8000000
+00000000: 27BDFFE0
+00000004: 3C010000
+00000008: 3421000C
+0000000C: AFA10000
+...
+00000058: 0C00001C
+...
+000000B8: 03E00008
 ```
 
 ```sh
 ./sentinel-app assemble \
-  /data/home/qnxuser/sentinel-32/examples/countdown.asm \
-  /data/home/qnxuser/sentinel-32/artifacts/countdown.bin
+  /data/home/qnxuser/sentinel-32/examples/sample-analysis.asm \
+  /data/home/qnxuser/sentinel-32/artifacts/sample-analysis.bin
 ```
 
-**Shows:** `wrote 20 bytes` and creates the raw assembled program at the given
+**Shows:** `wrote 188 bytes` and creates the raw assembled program at the given
 artifact path.
 
 ```sh
 ./sentinel-app run \
-  /data/home/qnxuser/sentinel-32/examples/countdown.asm \
-  9
+  /data/home/qnxuser/sentinel-32/examples/sample-analysis.asm \
+  256
 ```
 
-**Shows:** the reference emulator executes exactly nine instructions and nine
-virtual cycles. The loop finishes with `R01=0`, the stack pointer remains at
-`R29=0x20010000`, and the PC advances past `halt`:
+**Shows:** the reference emulator executes 91 instructions over 112 virtual
+cycles. The five loads and five stores cost two cycles each, and `divu` costs
+twelve.
+The final results match the comments in the source, the stack pointer is
+restored, and the PC advances past `halt`:
 
 ```text
-status=halted steps=9 cycles=9 pc=0x00000014 hi=0x00000000 lo=0x00000000
-R00=0x00000000 R01=0x00000000 ...
+status=halted steps=91 cycles=112 pc=0x00000070 hi=0x00000001 lo=0x0000000D
+R00=0x00000000 R01=0x00000012 R02=0x00000042 R03=0x00000019 ...
+R07=0x00000003 R08=0x0000000D R09=0x00000001 ... R29=0x20010000 ...
 ```
 
 ```sh
 ./sentinel-app step \
-  /data/home/qnxuser/sentinel-32/examples/countdown.asm \
-  9
+  /data/home/qnxuser/sentinel-32/examples/sample-analysis.asm \
+  256
 ```
 
 **Shows:** an interactive `s32>` prompt before any instruction runs. Press
@@ -116,14 +267,14 @@ executed instruction reports its PC, decoded operation, cycle cost, cumulative
 cycles, next PC, status, changed registers, and memory writes:
 
 ```text
-s32> step=2 pc=0x00000004 instruction=AluImmediate { ... } cost=1 cycles=2 next_pc=0x00000008 status=running changes=[R01=0x00000003] writes=[]
+s32> step=4 pc=0x0000000C instruction=Store { ... } cost=2 cycles=5 next_pc=0x00000010 status=running changes=[] writes=[0x2000FFE0=0C000000]
 ```
 
-After nine individual or continued steps, it prints the final register dump
+After individual or continued steps, it prints the final register dump
 and:
 
 ```text
-stepper-complete status=halted steps=9 cycles=9 pc=0x00000014
+stepper-complete status=halted steps=91 cycles=112 pc=0x00000070
 ```
 
 ## 4. Check the AI service
@@ -261,10 +412,14 @@ unset S32_AI_CONFIG_PATH
 unset S32_AI_CHECK_TIMEOUT_MS
 unset S32_AI_MAX_OUTPUT_TOKENS
 unset S32_AI_RULES_PATH
+unset S32_DEMO_ROOT
+unset S32_TUI_SNAPSHOT_PATH
+unset S32_TUI_AI_PROFILE
 unset LLAMA_API_KEY
 ```
 
-**Shows:** no output. The shell no longer carries the demo overrides.
+**Shows:** no output. The shell no longer carries the CLI or TUI demo
+overrides. Keep `TERM` set to the value supplied by the SSH client.
 
 This demonstration uses a normalized educational digital twin. AI findings
 are untrusted advisory text, the mission runs are deterministic simulations,

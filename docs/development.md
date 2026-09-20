@@ -215,8 +215,8 @@ Copy both the executable and source fixture to the Pi using the documented
 ```sh
 scp target/qnx800/aarch64-unknown-nto-qnx800/release/sentinel-app \
   qnxuser@qnxpi59.local:/data/home/qnxuser/sentinel-32/release/sentinel-app
-scp examples/countdown.asm \
-  qnxuser@qnxpi59.local:/data/home/qnxuser/sentinel-32/examples/countdown.asm
+scp examples/sample-analysis.asm \
+  qnxuser@qnxpi59.local:/data/home/qnxuser/sentinel-32/examples/sample-analysis.asm
 scp examples/valve-controller.asm \
   qnxuser@qnxpi59.local:/data/home/qnxuser/sentinel-32/examples/valve-controller.asm
 ssh qnxuser@qnxpi59.local
@@ -230,7 +230,7 @@ uname -a
 chmod 755 /data/home/qnxuser/sentinel-32/release/sentinel-app
 /data/home/qnxuser/sentinel-32/release/sentinel-app
 /data/home/qnxuser/sentinel-32/release/sentinel-app run \
-  /data/home/qnxuser/sentinel-32/examples/countdown.asm 9
+  /data/home/qnxuser/sentinel-32/examples/sample-analysis.asm 256
 echo $?
 ```
 
@@ -238,35 +238,36 @@ The identity command should print `sentinel-app s32-isa-v0`. The run's first
 line must be exactly:
 
 ```text
-status=halted steps=9 cycles=9 pc=0x00000014 hi=0x00000000 lo=0x00000000
+status=halted steps=91 cycles=112 pc=0x00000070 hi=0x00000001 lo=0x0000000D
 ```
 
-The register dump must show `R01=0x00000000` and `R29=0x20010000`, and the exit
-status must be `0`.
+The register dump must show `R02=0x00000042`, `R03=0x00000019`,
+`R07=0x00000003`, `R08=0x0000000D`, `R09=0x00000001`, and restored
+`R29=0x20010000`; the exit status must be `0`.
 
 The same target artifact can pause after each instruction:
 
 ```sh
 /data/home/qnxuser/sentinel-32/release/sentinel-app step \
-  /data/home/qnxuser/sentinel-32/examples/countdown.asm 9
+  /data/home/qnxuser/sentinel-32/examples/sample-analysis.asm 256
 ```
 
 Press Enter to step, enter `r` to inspect all registers, and enter `c` to
 finish. The last step must report `instruction=Halt`, and the completion
-line must report `status=halted steps=9 cycles=9 pc=0x00000014`.
+line must report `status=halted steps=91 cycles=112 pc=0x00000070`.
 
-Then test that the cycle budget fails closed before the ninth instruction:
+Then test that the cycle budget fails closed before `halt`:
 
 ```sh
 /data/home/qnxuser/sentinel-32/release/sentinel-app run \
-  /data/home/qnxuser/sentinel-32/examples/countdown.asm 8
+  /data/home/qnxuser/sentinel-32/examples/sample-analysis.asm 111
 echo $?
 ```
 
 Expected stderr and exit status are:
 
 ```text
-error: cycle budget exceeded: cycles=8, next_cost=1, budget=8
+error: cycle budget exceeded: cycles=111, next_cost=1, budget=111
 2
 ```
 
@@ -405,6 +406,61 @@ cargo test -p sentinel-scenario rocket_ -- --nocapture
 
 Record the QNX commands, complete output, exit statuses, tested commit, binary
 hash, and target image with the run evidence.
+
+## Ratatui QNX build and SSH procedure — 2026-09-20
+
+The interface uses `ratatui` 0.29.0 with default features disabled and a safe
+ANSI backend in `sentinel-app`. Ratatui declares Rust 1.74 and the selected
+feature graph contains no platform terminal library. The exact target check
+and linked app build completed with:
+
+```sh
+cargo +qnx800 check -p sentinel-app \
+  --target aarch64-unknown-nto-qnx800 --release
+
+source /var/home/qubik65536/qnx800/qnxsdp-env.sh
+cargo +qnx800 build -p sentinel-app \
+  --target aarch64-unknown-nto-qnx800 --release \
+  --target-dir target/qnx800
+```
+
+`file` identifies the linked result as an AArch64 ELF64 PIE with interpreter
+`/usr/lib/ldqnx-64.so.2`. The final validated artifact SHA-256 is
+`6f5b7807f4ab4b3f131b0f1f10857313670440bf995b7a68c2e063235f0da324`;
+the upload script writes the same identity to
+`artifacts/sentinel-app.sha256`.
+
+The upload script transferred the linked binary and demo fixtures to
+`/data/home/qnxuser/sentinel-32`. Launch it from an authenticated shell with:
+
+```sh
+ssh -t qnxuser@qnxpi59.local
+cd /data/home/qnxuser/sentinel-32/release
+export TERM=xterm-256color
+export S32_DEMO_ROOT=/data/home/qnxuser/sentinel-32
+./sentinel-app tui /data/home/qnxuser/sentinel-32/examples/sample-analysis.asm
+```
+
+The live check on QNX 8.0.0 image `2026/06/05-16:21:14EDT` displayed Assemble,
+Run, and Mission, accepted batched navigation and stepping, completed the
+standalone program and rocket mission, redrew after an 80x24 to 70x18
+pseudo-terminal resize, and restored the cursor and alternate screen on `q`.
+The deployed binary and uploaded hash file both matched the SHA-256 above. The
+target CLI assembly check also exited successfully for the deployed standalone
+example.
+
+The renamed `examples/sample-analysis.asm` replacement passes the host lane and
+QNX workspace release check. Its noninteractive target refresh was rejected by
+SSH authentication, so copy the updated fixture during the next authenticated
+target session before using the result values documented above as target
+evidence.
+
+QNX `stty` interprets `min` and `time` as two-digit hexadecimal operands. The
+backend therefore uses `min=00 time=01` on QNX and falls back to GNU `stty`
+syntax on the host. QNX also reports dimensions as `rows=height,width` in
+`stty -a`; the backend parses that form because QNX does not implement GNU
+`stty size`. The final target smoke verified idle polling, batched keys, and
+live resize without an extra newline.
 
 ## Required BUILD-001 evidence
 

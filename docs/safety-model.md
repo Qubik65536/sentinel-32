@@ -2,15 +2,25 @@
 
 ## Scope of claims
 
-Sentinel-32 is a safety-oriented prototype operating only on a software digital twin. Its deterministic mechanisms can produce evidence that a specific firmware image and scenario bundle passed specified checks under recorded bounds. They cannot establish certification, general correctness, freedom from common-mode defects, or safe operation of physical launch hardware.
+Sentinel-32 is a safety-oriented prototype operating only on a software digital twin. Its deterministic tests and runs describe a specific firmware image and scenario bundle under recorded bounds. They cannot establish certification, general correctness, freedom from common-mode defects, or safe operation of physical launch hardware.
 
-Bounded exploration is evidence over a finite state/depth budget, not formal proof. Virtual cycle accounting is deterministic within the S32 model; host or target timing measurements are observations, not proven worst-case execution time. The advisory AI checker may identify a possible mismatch between current state and written rules, but its output is untrusted and is neither safety evidence nor an enforcement result.
+The project does not currently perform bounded state-space exploration or claim
+formal proof. Virtual cycle accounting is deterministic within the S32 model;
+host or target timing measurements are observations, not proven worst-case
+execution time. The advisory AI checker may identify a possible mismatch
+between current state and written rules, but its output is untrusted and is
+neither safety evidence nor an enforcement result.
 
 ## Authority model
 
-Firmware writes requests. It cannot directly change the simulated plant, approve itself, grant capabilities, publish scenarios, clear safety latches, or bypass the output gate. The independent output gate combines current telemetry, invariant results, compiled policy, firmware approval state, and abort state before accepting a request.
+Firmware writes requests. It cannot directly change the simulated plant, grant
+capabilities, clear safety latches, or bypass output decisions. The independent
+safety component combines current telemetry, invariant results, compiled
+policy, firmware authority state, and abort state before accepting a request.
 
-System policy may reduce a firmware-requested capability set but never expand it. Evidence is authoritative only for the exact firmware bytes, manifest, compiled scenario hash, ISA/policy/verifier versions, and validation bounds recorded in the report.
+System policy may reduce a firmware-requested capability set but never expand
+it. Recorded results apply only to the exact inputs, versions, and bounds named
+with them.
 
 The written AI rule set is a human-readable review aid. It is versioned and hashed independently from compiled scenario policy. A deterministic invariant remains necessary even when a written rule describes the same hazard. `no_issue_observed` cannot authorize a transition, silence a deterministic alarm, or count as a passed safety check. `possible_violation` and `unknown` may be shown to an operator, but they cannot directly change output state.
 
@@ -33,7 +43,7 @@ the VM, scenario runtime, or output gate. `sentinel-safety` consumes the active
 typed rule IDs reported by the runtime. Pressure-band edges, feedback
 agreement, power combinations, readiness inputs, staleness, abort persistence,
 authority loss, and armed-time replacement have explicit host truth-table
-tests. Counterexample production remains future `SAFE-003` work.
+tests. Automated counterexample production is outside the current roadmap.
 
 ## Safe-state resolution
 
@@ -67,22 +77,16 @@ phase; advisory findings cannot allow it.
 
 | Hazard or fault | Detection owner | Required containment |
 |---|---|---|
-| Illegal instruction or invalid control flow | VM | Trap candidate; active image unchanged |
+| Illegal instruction or invalid control flow | VM | Trap the current run without applying another instruction |
 | Protected or unauthorized memory access | VM/capability policy | Trap and record address/reason |
-| Infinite loop or budget excess | VM | Stop candidate; safe state if active |
-| Firmware or scenario byte corruption | Hash/deployment gate | Refuse activation/use |
-| Controller hang or stale heartbeat | Watchdog | Remove output authority and resolve safe state |
+| Infinite loop or budget excess | VM | Stop the bounded run |
 | Critical pressure or invalid launch band | Safety monitor | Block ignition; hold or latch abort by policy |
 | Valve command/feedback mismatch | Transition monitor | Hold or abort after configured timeout |
 | Electrical, continuity, clearance, or readiness loss | Safety monitor | Block arming/ignition; hold or abort by phase policy |
-| AI checker, network, or UI loss | Process supervision | Active deterministic control continues; checker status becomes unavailable |
-| Malformed, stale, or misleading AI finding | Schema/hash checks and authority separation | Reject or label the finding; deterministic control and evidence remain unchanged |
-| Update requested while armed | Deployment gate | Refuse update and retain current pair |
+| AI checker, network, or UI loss | Authority separation | Deterministic VM, mission, and output-decision APIs remain independent; checker status becomes unavailable |
+| Malformed, stale, or misleading AI finding | Schema/hash checks and authority separation | Reject or label the finding; deterministic state remains unchanged |
 
-## Last-known-good and rollback
-
-Activation is transactional across a compatible firmware/scenario pair. The last-known-good pair remains immutable until a replacement has complete, hash-bound evidence and is accepted. Rollback cannot make an incompatible scenario/firmware pairing, clear the attempt abort latch, or bypass current policy.
-
-## Evidence minimum
-
-A validation report includes source and bytecode hashes, source and compiled scenario hashes, manifest, ISA/policy/verifier versions, tests and explored-state counts, bounds, first or minimal counterexample when available, maximum observed virtual cycles, timing observations labeled as such, shadow comparison, and deterministic reason codes.
+The former last-known-good lifecycle, rollback, evidence-report, watchdog, and
+bounded-exploration designs are retired from the active roadmap. Their absence
+limits the safety claims of this laboratory and must remain visible in product
+documentation.

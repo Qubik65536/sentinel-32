@@ -1,6 +1,6 @@
 # Repository context
 
-Last updated: 2026-09-19 during the `AI-002`/`AI-003` provider integration.
+Last updated: 2026-09-20 during Ratatui implementation and QNX validation.
 
 ## Current implementation
 
@@ -24,10 +24,17 @@ showing decoded operations, cycle use, state changes, and memory writes.
 bounded strict YAML parsing, typed validation, canonical bundle compilation,
 stable MMIO allocation, generated symbols, and a generic deterministic
 runtime. The app exposes VM and scenario commands, including an end-to-end
-firmware harness with YAML-allocated MMIO. `BOOT-002`, `ISA-002`,
-`VM-001`, and `SCEN-002` remain formally blocked by the missing target-side
-evidence dependency in `BUILD-001`; `SCEN-002` also awaits review of its schema
-clarification.
+firmware harness with YAML-allocated MMIO. The former formal completion
+blockers and unfinished roadmap are retained only as historical context.
+
+`sentinel-app tui` now provides Assemble, Run, Mission, and Advisory views.
+The application pins Ratatui 0.29.0 without optional backends and implements a
+safe ANSI/`stty` backend that contains no FFI or `unsafe` code. It supports
+keyboard navigation, resize polling, compact terminals, bounded source
+editing with save-conflict detection, assembly symbols/encodings, coherent VM
+stepping and run/pause, tank/rocket mission playback, and asynchronous advisory
+checks with a permanent no-authority banner. It consumes typed Rust results and
+does not parse CLI output.
 
 `examples/rocket-launch-default.yaml` is the default normalized launch-pad
 digital twin. It compiles to 23 MMIO slots and exercises both pressure
@@ -78,23 +85,29 @@ Current requirements give AI one advisory function: compare a bounded current-st
 - `README.md`: project entry point and honest current status.
 - `.agent/plan.md`: task dependencies, status, and acceptance criteria.
 - `docs/project.md`: scope, non-goals, vocabulary, success boundary.
-- `docs/architecture.md`: intended boundaries and lifecycle.
-- `docs/development.md`: host/QNX workflow and `BUILD-001` audit/blocker.
+- `docs/architecture.md`: implemented boundaries and TUI integration.
+- `docs/tui.md`: Ratatui layouts, implementation, state flow, and visual rules.
+- `docs/tui-user-guide.md`: host and QNX launch, complete key map, workflows,
+  advisory configuration, and terminal recovery.
+- `docs/development.md`: host/QNX workflow and historical target audit.
 - `docs/configuration.md`: intended configuration for core services and the advisory checker backends.
 - `docs/advisory-ai.md`: exact provider-neutral snapshot, written-rule, finding, hash, limit, and authority contract.
 - `docs/ai-user-guide.md`: deployment-server, QNX client, rocket sample, OpenAI test, and failure-isolation procedure.
-- `docs/demo.md`: command-first QNX demonstration of standalone S32 assembly,
-  interactive instruction stepping, live advisory checks, persistent rocket
-  and tank assembly missions, and control independence when the AI server is
-  stopped.
-- `docs/s32-isa.md`: accepted ISA v0 contract; implemented incrementally under `ISA-002` and `VM-001`.
-- `docs/scenario-schema.md`: accepted schema v0 contract and the concrete forms implemented by `SCEN-002`.
+- `docs/demo.md`: reproducible TUI walkthroughs for assembly, VM execution,
+  rocket/tank missions, advisory checks, and AI failure isolation, followed by
+  the scriptable QNX CLI demonstration.
+- `docs/s32-isa.md`: accepted and implemented ISA v0 contract.
+- `docs/scenario-schema.md`: accepted schema v0 contract and implemented concrete forms.
 - `crates/sentinel-core`: portable S32 ISA, assembler, VM, memory, traps, cycles, and tests.
 - `crates/sentinel-scenario`: strict parser, compiler, canonical artifacts, MMIO symbols, and deterministic runtime.
 - `crates/sentinel-safety`: deterministic safe-state resolution and output request decisions.
 - `crates/sentinel-ai-check`: provider-neutral advisory contract, validators, `llama.cpp` client, and feature-gated OpenAI test client.
-- `crates/sentinel-app`: host/QNX CLI for VM and scenario workflows.
-- `examples/countdown.asm`: source-level assembler smoke example.
+- `crates/sentinel-app`: host/QNX CLI and Ratatui interface for VM, mission,
+  and advisory workflows.
+- `examples/sample-analysis.asm`: standalone sample-analysis demonstration using a
+  stack buffer, subroutine call, loop, comparisons, loads/stores, and HI/LO. It
+  deterministically produces sum 66, maximum 25, threshold count 3, average
+  13, and remainder 1 in 91 instructions and 112 virtual cycles.
 - `examples/lab-scenario.yaml`: hardware-only tank-pressure and two-valve MMIO inventory with no controller actions.
 - `crates/sentinel-scenario/src/test-scenario.yaml`: internal full-schema compiler fixture.
 - `examples/valve-controller.asm`: commented firmware that fills to a pressure target, holds ten simulated seconds, unloads, and closes both valves.
@@ -119,21 +132,26 @@ Current requirements give AI one advisory function: compare a bounded current-st
 - `docs/threat-model.md`: assets, untrusted boundaries, abuse cases, controls.
 - `docs/validation.md`: validation layers and current results.
 - `docs/decisions/`: accepted bootstrap architecture decisions and revisit triggers.
+- `docs/decisions/DEC-015-ratatui-interface.md`: accepted TUI roadmap reset.
 - `docs/decisions/DEC-012-single-invocation-control.md`: operator-started firmware remains active until its bounded operation completes.
 
 ## Verified environment
 
-Host checks pass under upstream Rust 1.98.1 on `x86_64-unknown-linux-gnu`.
-QNX SDP 8.0 Build 14 and linked toolchain `qnx800` produced the prior AArch64
-QNX 8.0 release binary. The prior scenario-enabled artifact had SHA-256
-`50a2c8546e1f256f85d7429b7f1b3e68409559fbc13cdcab6b88cb6824146aae`.
-The five-crate rocket/safety/advisory and persistent assembly-runner update
-passes the host lane. The QNX target libraries and updated app objects compile,
-but the latest final link was blocked by a local QNX license-lock timeout, so
-that older hash does not identify the current source.
-The operator reports successful earlier Raspberry Pi 5 execution; exact target
-image, commands, output, exit status, and execution of the current artifact
-remain to be captured before `BUILD-001` is complete.
+Host checks use upstream Rust 1.98.1 on `x86_64-unknown-linux-gnu`. Ratatui TUI
+unit/buffer tests and a real host PTY render/input/restore smoke pass. QNX SDP
+8.0 Build 14 and linked toolchain `qnx800` (Rust 1.85.1-dev) complete the
+AArch64 QNX 8.0 release cross-build with the custom ANSI backend. The release
+binary has SHA-256
+`6f5b7807f4ab4b3f131b0f1f10857313670440bf995b7a68c2e063235f0da324`.
+That exact artifact and fixtures were uploaded and executed on QNX 8.0.0 image
+`2026/06/05-16:21:14EDT` on the Raspberry Pi 5. Through an SSH pseudo-terminal,
+the TUI rendered Assemble/Run/Mission, accepted batched navigation and step
+keys, redrew after 80x24 to 70x18 resize, and restored cursor, alternate screen,
+and terminal state on `q`. The deployed CLI also validated the standalone
+fixture that preceded the current sample-analysis replacement.
+The TUI advisory worker resolves its default rules and AI configuration from
+the same demo root, so launching from QNX `release/` does not require a
+relative `config/` directory or a redundant `S32_AI_RULES_PATH` export.
 The documented QNX deployment root is `/data/home/qnxuser/sentinel-32`, with
 release, example, and artifact subdirectories. `scripts/qnx-pi-upload.sh`
 transfers an already-built release and fixtures to `qnxuser@qnxpi59.local`;
@@ -143,14 +161,13 @@ testing remains a separate operator SSH session.
 
 ## Next work
 
-Run the configured `llama-server`, capture its version and approved GGUF hash,
-then execute the AI health/check and failure-isolation procedure on QNX.
-Review the SCEN-002 runtime clarification and SAFE-001 trusted safety behavior.
-Then resolve the QNX license lock, link the current workspace, run its VM and
-scenario checks on the Raspberry Pi 5, and capture the evidence in
-`docs/development.md`. The next unimplemented critical-path work is `SAFE-002`
-or `VM-002`; live provider evaluation remains under `AI-002` through `AI-004`.
+The TUI roadmap is complete. Preserve the CLI for automation and diagnosis and
+keep later changes within the recorded UI and safety boundaries. Copy the
+replacement standalone example to the QNX demo tree during the next
+authenticated target session; the noninteractive refresh attempt was rejected
+by target authentication.
 
 ## Working tree note
 
-The AI provider batch began from commit `d561adb`; preserve unrelated work.
+The roadmap reset began with pre-existing uncommitted AI provider work in the
+tree. Preserve unrelated work.

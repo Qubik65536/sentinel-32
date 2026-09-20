@@ -14,6 +14,7 @@ pub struct Assembly {
     pub origin: u32,
     pub entry: Option<u32>,
     pub bytes: Vec<u8>,
+    pub symbols: BTreeMap<String, u32>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -120,6 +121,7 @@ pub fn assemble_with_symbols(
             origin,
             entry,
             bytes,
+            symbols,
         })
     } else {
         Err(diagnostics)

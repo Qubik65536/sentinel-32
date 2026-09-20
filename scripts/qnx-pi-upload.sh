@@ -30,7 +30,7 @@ mkdir -p \
 cp "$APP" "$STAGING_TREE/release/sentinel-app"
 cp "$PROJECT_ROOT/config/ai-llama-default.env.example" \
   "$STAGING_TREE/config/ai-llama-default.env.example"
-cp "$PROJECT_ROOT/examples/countdown.asm" "$STAGING_TREE/examples/countdown.asm"
+cp "$PROJECT_ROOT/examples/sample-analysis.asm" "$STAGING_TREE/examples/sample-analysis.asm"
 cp "$PROJECT_ROOT/examples/valve-controller.asm" \
   "$STAGING_TREE/examples/valve-controller.asm"
 cp "$PROJECT_ROOT/examples/rocket-controller.asm" \

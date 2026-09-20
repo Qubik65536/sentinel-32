@@ -4,47 +4,53 @@
 
 This document records the version-0 boundaries. `sentinel-core`,
 `sentinel-scenario`, `sentinel-safety`, `sentinel-ai-check`, and `sentinel-app`
-now exist; remaining crates are introduced only with functional content and
-their corresponding tasks.
+exist. The TUI is implemented inside `sentinel-app`; no UI types enter the
+domain crates.
 
 ## Trust and data flow
 
 ```mermaid
 flowchart LR
-    Human[Human or Scenario Studio] -->|untrusted source| SC[Scenario compiler]
-    Human -->|untrusted firmware| AV[Assembler and verifier]
-    SC -->|immutable bundle + hash| AV
-    AV -->|candidate + bound evidence| Shadow[Shadow controller]
-    Shadow --> Gate[Deployment gate]
-    Gate --> Active[Active controller]
-    Active -->|requests only| Output[Output gate]
+    Human[Human through CLI or TUI] -->|untrusted scenario| SC[Scenario compiler]
+    Human -->|untrusted firmware| AS[Assembler]
+    AS --> VM[S32 VM]
+    AS --> Mission[Mission runner]
+    SC -->|immutable bundle + hash| Mission
+    Mission -->|requests only| Output[Deterministic output decisions]
     SC --> Twin[Scenario runtime / digital twin]
-    Twin -->|telemetry| Active
-    Twin --> Monitor[Safety monitor]
-    Active --> Monitor
+    Twin -->|telemetry and feedback| Mission
+    Twin --> Monitor[Typed rule evaluation]
+    Mission --> Monitor
     Monitor -->|override / safe state| Output
     Output --> Twin
     Twin -->|bounded state snapshot| AIC[Advisory AI rule checker]
     Rules[Versioned written AI rules] --> AIC
-    AIC -->|untrusted findings| Observe[Operator display and log]
+    AIC -->|untrusted findings| Observe[Ratatui advisory view and log]
+    VM --> Observe
+    Mission --> Observe
 ```
 
-AI findings, user input, scenario source, firmware source, and the network are outside the trusted computing base. The AI checker has no edge to the assembler, verifier, safety monitor, deployment gate, or output gate. The initial trusted computing base is the S32 decoder/interpreter, memory and capability enforcement, scenario compiler and canonicalization, invariant evaluator, safe-state resolver, output and deployment gates, watchdog, hashing/evidence binding, and the QNX adapter used by those components.
+AI findings, user input, scenario source, firmware source, terminal input, and
+the network are untrusted. The AI checker has no edge to the assembler, VM,
+typed rule evaluation, or output decisions. The implemented trusted boundary
+contains the S32 decoder/interpreter, memory and capability enforcement,
+scenario compiler and canonicalization, invariant evaluator, safe-state
+resolver, and output-decision logic. The TUI only renders snapshots and sends
+bounded commands through those APIs.
 
 ## Crate map
 
 | Crate | Responsibility | Key restriction |
 |---|---|---|
-| `sentinel-core` | ISA types, assembler, VM, traps, cycles, traces | No AI, UI, network, QNX, or unsafe code |
+| `sentinel-core` | ISA types, assembler, VM, traps, cycles, and step results | No AI, UI, network, QNX, or unsafe code |
 | `sentinel-scenario` | Schema, validation, canonicalization, MMIO allocation, runtime bundle and deterministic dynamics | No hard-coded rocket semantics in generic machinery |
-| `sentinel-safety` | Invariants, safe-state resolution, static checks, exploration, evidence, lifecycle decisions | Narrative and AI scores cannot authorize anything |
-| `sentinel-protocol` | Versioned bounded service messages | No pointers or platform handles |
-| `sentinel-qnx` | Timing, scheduling, IPC, health and narrowly scoped FFI | Own nearly all target-specific unsafe code |
+| `sentinel-safety` | Invariants, safe-state resolution, output-request decisions, and armed replacement denial | Narrative and AI scores cannot authorize anything |
 | `sentinel-ai-check` | Snapshot/rule/finding types, fixtures, test-only OpenAI adapter, local `llama.cpp` adapter, evaluation metadata | Advisory only; no firmware generation, activation, policy, or output-control path |
-| `sentinel-app` | Process entry points, orchestration, NDJSON, dashboard and Studio | UI failure cannot affect essential control |
+| `sentinel-app` | CLI entry points, typed application sessions, orchestration, and Ratatui interface | UI failure cannot affect deterministic execution or output decisions |
 
 `sentinel-core`, `sentinel-scenario`, `sentinel-safety`, `sentinel-ai-check`,
-and `sentinel-app` are implemented workspace members. The core contains ISA
+and `sentinel-app` are implemented workspace members. The TUI remains inside
+`sentinel-app`; Ratatui types do not enter the domain crates. The core contains ISA
 types, canonical decode/encode, source assembly, sparse memory and manifest
 types, and the reference interpreter. The scenario crate contains bounded
 source parsing, typed validation, canonical compilation, stable MMIO
@@ -53,13 +59,53 @@ implements typed output decisions, safe-state precedence, abort and authority
 containment, and the armed replacement check. `sentinel-ai-check` implements
 the bounded snapshot, written-rule, finding, provenance, hash, and
 response-validation contract. Current QNX cross-build results are recorded in
-`docs/development.md`; the other rows remain planned boundaries.
+`docs/development.md`.
 
-## Runtime separation
+## Interactive application boundary
 
-The host-native milestone may use modules or threads. The target architecture separates the safety monitor/output gate, active controller, shadow controller, scenario runtime, compiler/bundle store, verifier/deployment gate, and bounded snapshot publisher into QNX processes. For the hackathon deployment, the advisory checker client and pinned `llama.cpp` instance run on the same QNX deployment host. The model server binds `0.0.0.0:8080` for administration on the restricted lab network, while the checker connects through `127.0.0.1:8080`. Loss of that transport has no control effect. Initial QNX priority intent, pending target measurement, is: safety and output gating; scenario clock and active controller; trace and snapshot transport; shadow controller; verifier.
+The CLI and TUI drive the same typed application sessions. Those sessions own
+bounded orchestration and expose immutable snapshots for rendering. The TUI
+does not parse CLI text, and rendering cannot directly modify VM memory,
+scenario state, safety decisions, or advisory results. User actions become
+typed commands that retain the same validation, cycle budgets, and capability
+checks as the CLI.
 
-The AI check is asynchronous with respect to control. The checker receives a size-bounded, schema-validated snapshot plus exact written-rule version and hash. Its structured result links each finding to rule IDs and snapshot fields, and may be displayed or logged only. Timeouts, malformed results, model loss, or stopping the entire checker cannot interrupt the active controller or suppress deterministic alarms.
+Ratatui renders the complete visible frame from current view state. Terminal
+input is collected centrally and translated into tab-specific commands.
+Potentially slow advisory network work runs through a bounded worker channel;
+VM and mission operation never waits for it. Terminal setup and teardown are
+owned by one shell so normal exit, errors, and panics restore raw mode, cursor
+state, and the alternate screen.
+
+The implemented views are:
+
+| View | Primary information |
+|---|---|
+| Assemble | Source, diagnostics, symbols, encoded words, decoded instructions |
+| Run | Current instruction, registers, `HI`/`LO`/`PC`, cycles, memory writes, mappings, traps |
+| Mission | Firmware position, phase/tick, telemetry, feedback, requests, applied outputs, rules, faults, hold/abort, timeline |
+| Advisory | Snapshot/rule identity, freshness, provider health/provenance, validated findings, authority warning |
+
+The interface pins Ratatui 0.29.0 without its optional terminal backends and
+uses a small safe ANSI backend plus `stty`. This keeps platform-specific FFI and
+`unsafe` code out of the app and passes the QNX 8.0 release cross-build. QNX
+operators allocate a pseudo-terminal with `ssh -t`; the CLI remains available
+for automation and diagnosis.
+
+## Advisory runtime separation
+
+For the existing hackathon configuration, the advisory checker client and
+pinned `llama.cpp` instance may run on the same QNX deployment host. The model
+server binds `0.0.0.0:8080` for administration on the restricted lab network,
+while the checker connects through `127.0.0.1:8080`. Loss of that transport has
+no control effect.
+
+The AI check is asynchronous with respect to mission execution. The checker
+receives a size-bounded, schema-validated snapshot plus exact written-rule
+version and hash. Its structured result links each finding to rule IDs and
+snapshot fields, and may be displayed or logged only. Timeouts, malformed
+results, model loss, or stopping the entire checker cannot interrupt the VM or
+mission runner or suppress deterministic rule results.
 
 OpenAI is a development test backend used to exercise the same checker contract and evaluate fixtures. It is not a deployment fallback. The hackathon runtime backend is a pinned deployment-server GGUF model served by `llama.cpp`; model file hash, `llama.cpp` version, launch arguments, prompt contract, and rule-set hash are provenance rather than safety evidence.
 
@@ -114,6 +160,10 @@ safe-state precedence, and emits accepted, overridden, or rejected output
 decisions. Publication and firmware activation are forbidden while the
 simulation is armed.
 
-## Lifecycle boundary
+## Roadmap boundary
 
-A proposal becomes a candidate after parsing and assembly. A candidate may enter shadow only with deterministic validation evidence bound to its bytes and the compiled scenario hash. Activation is a separate deterministic decision. Active and last-known-good state are retained transactionally; rollback requires hash-compatible artifacts and cannot clear a launch-attempt abort latch.
+The former browser dashboard, Scenario Studio, NDJSON service, static verifier,
+bounded exploration, evidence reports, candidate/shadow/active lifecycle, QNX
+process split, and watchdog roadmap is retired. Existing types or partial code
+related to those ideas may remain, but the project does not claim those
+capabilities. The active roadmap is the Ratatui interface in `.agent/plan.md`.

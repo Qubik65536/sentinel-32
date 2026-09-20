@@ -251,12 +251,16 @@ case-insensitive.
 .entry start
 
 start:
+    addiu sp, sp, -8
     li    r1, 3
-
-countdown:
-    addiu r1, r1, -1
-    bne   r1, r0, countdown
+    sw    r1, 0(sp)
+    jal   double_value
+    addiu sp, sp, 8
     halt
+
+double_value:
+    addu  r2, r1, r1
+    ret
 ```
 
 The assembler receives an aligned origin. Labels are absolute byte addresses.
@@ -295,14 +299,21 @@ not occupy memory by itself.
 
 ### How the included examples map to real instructions
 
-`examples/countdown.asm` uses:
+`examples/sample-analysis.asm` is a standalone sample-analysis program. Representative
+forms include:
 
 | Source | What the assembler/CPU uses |
 |---|---|
 | `.entry start` | entry metadata; no instruction |
-| `li r1, 3` | `lui r1, 0` then `ori r1, r1, 3` |
-| `addiu r1, r1, -1` | real `addiu`, opcode `001001` |
-| `bne r1, r0, countdown` | real `bne`, opcode `000101`, signed PC-relative displacement |
+| `addiu sp, sp, -32` | real `addiu`; allocate an aligned stack frame |
+| `li r1, 12` | `lui r1, 0` then `ori r1, r1, 12` |
+| `sw r1, 0(sp)` / `lw r1, 0(r4)` | real word store/load instructions |
+| `jal analyze_samples` | real `jal`; write the return address to `r31` and jump |
+| `move r4, sp` | `addu r4, sp, r0` |
+| `sltu r10, r3, r1` | real unsigned comparison used to update the maximum |
+| `b sample_loop` | `beq r0, r0, sample_loop` |
+| `divu r2, r11` / `mflo r8` / `mfhi r9` | divide into `LO`/`HI`, then copy quotient/remainder |
+| `ret` | `jr r31` |
 | `halt` | real `halt`, opcode `111110`, remaining 26 bits zero |
 
 `examples/valve-controller.asm` uses:
