@@ -38,6 +38,11 @@ process environment taking precedence. The single file contains the localhost
 endpoint, absolute QNX paths, credential, and model hash. The server launcher
 computes and records the first GGUF hash there and rejects a later mismatch
 without logging the stored credential. The repository tracks only an example.
+An initial live QNX request reached the local Qwen server but exceeded the
+30-second client timeout; a later 512-token request completed in 31.643 seconds
+with an invalid response, consistent with truncated structured output. The
+client now disables reasoning, tightens output bounds, and reports non-stop
+finish reasons as incomplete. This fix still needs a rebuilt QNX run.
 
 Canonical S32 source presentation uses lowercase MIPS-style mnemonics,
 directives, and registers with spaced operands. Markdown source examples use

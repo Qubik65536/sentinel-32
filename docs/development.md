@@ -138,6 +138,9 @@ including the networking code. The final link again failed with exit status
 does not establish a passing QNX build or target execution of the client.
 The single default-file configuration loader also compiled for the QNX target
 and reached the same licensed final-link failure.
+After tightening the live `llama.cpp` response contract, `cargo +qnx800 check
+--workspace --target aarch64-unknown-nto-qnx800 --release` completed for all
+workspace crates. A new linked binary and target rerun are still required.
 
 ## Raspberry Pi 5 deployment directory
 

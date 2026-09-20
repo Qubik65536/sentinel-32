@@ -31,6 +31,7 @@ pub enum ProviderError {
     Transport,
     HttpStatus(u16),
     ResponseTooLarge,
+    IncompleteResponse,
     Protocol,
     InvalidProviderResponse,
     Contract(CheckerError),
@@ -195,8 +196,11 @@ impl AdvisoryProvider for LlamaCppProvider {
                 {"role": "user", "content": prompt}
             ],
             "temperature": 0,
+            "seed": 0,
             "max_tokens": self.config.max_output_tokens,
             "stream": false,
+            "chat_template_kwargs": {"enable_thinking": false},
+            "reasoning_effort": "none",
             "response_format": {
                 "type": "json_schema",
                 "schema": findings_schema(request)
@@ -225,11 +229,14 @@ fn parse_llama_completion(
 ) -> Result<CheckResponse, ProviderError> {
     let envelope: ChatCompletion =
         serde_json::from_slice(bytes).map_err(|_| ProviderError::InvalidProviderResponse)?;
-    let content = envelope
+    let choice = envelope
         .choices
         .first()
-        .map(|choice| choice.message.content.as_bytes())
         .ok_or(ProviderError::InvalidProviderResponse)?;
+    if choice.finish_reason.as_deref() != Some("stop") {
+        return Err(ProviderError::IncompleteResponse);
+    }
+    let content = choice.message.content.as_bytes();
     let findings: ModelFindings =
         serde_json::from_slice(content).map_err(|_| ProviderError::InvalidProviderResponse)?;
     validate_wrapped_findings(
@@ -278,6 +285,8 @@ struct ChatCompletion {
 #[derive(Deserialize)]
 struct ChatChoice {
     message: ChatMessage,
+    #[serde(default)]
+    finish_reason: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -306,7 +315,7 @@ pub(crate) fn provider_prompt(request: &CheckRequest) -> Result<String, Provider
     let snapshot = serde_json::to_string(&request.snapshot).map_err(|_| ProviderError::Protocol)?;
     let rules = serde_json::to_string(&request.rules).map_err(|_| ProviderError::Protocol)?;
     Ok(format!(
-        "Compare SNAPSHOT_JSON with WRITTEN_RULES_JSON. Return one finding per written rule. Use unknown whenever required data is absent. Cite only supplied snapshot field paths. Keep each rationale concise.\nSNAPSHOT_JSON_BEGIN\n{snapshot}\nSNAPSHOT_JSON_END\nWRITTEN_RULES_JSON_BEGIN\n{rules}\nWRITTEN_RULES_JSON_END"
+        "Compare SNAPSHOT_JSON with WRITTEN_RULES_JSON. Return one finding per written rule. Use unknown whenever required data is absent. Cite only supplied snapshot field paths. Keep each rationale under 160 characters.\nSNAPSHOT_JSON_BEGIN\n{snapshot}\nSNAPSHOT_JSON_END\nWRITTEN_RULES_JSON_BEGIN\n{rules}\nWRITTEN_RULES_JSON_END"
     ))
 }
 
@@ -343,8 +352,12 @@ pub(crate) fn findings_schema(request: &CheckRequest) -> Value {
                     "properties": {
                         "rule_id": {"type": "string", "enum": rule_ids},
                         "status": {"type": "string", "enum": ["possible_violation", "no_issue_observed", "unknown"]},
-                        "cited_fields": {"type": "array", "items": cited_field_schema},
-                        "rationale": {"type": "string", "maxLength": 512}
+                        "cited_fields": {
+                            "type": "array",
+                            "maxItems": request.snapshot.content.fields.len(),
+                            "items": cited_field_schema
+                        },
+                        "rationale": {"type": "string", "maxLength": 256}
                     },
                     "required": ["rule_id", "status", "cited_fields", "rationale"],
                     "additionalProperties": false
@@ -627,7 +640,10 @@ mod tests {
             }]
         });
         let completion = json!({
-            "choices": [{"message": {"content": findings.to_string()}}]
+            "choices": [{
+                "message": {"content": findings.to_string()},
+                "finish_reason": "stop"
+            }]
         });
         let response = parse_llama_completion(
             completion.to_string().as_bytes(),
@@ -663,7 +679,10 @@ mod tests {
             }]
         });
         let completion = json!({
-            "choices": [{"message": {"content": findings.to_string()}}]
+            "choices": [{
+                "message": {"content": findings.to_string()},
+                "finish_reason": "stop"
+            }]
         });
         assert_eq!(
             parse_llama_completion(
@@ -679,6 +698,29 @@ mod tests {
             Err(ProviderError::Contract(CheckerError::UnknownField(
                 "telemetry.invented".to_owned()
             )))
+        );
+    }
+
+    #[test]
+    fn llama_adapter_reports_token_limited_output_as_incomplete() {
+        let completion = json!({
+            "choices": [{
+                "message": {"content": "{\"findings\":["},
+                "finish_reason": "length"
+            }]
+        });
+        assert_eq!(
+            parse_llama_completion(
+                completion.to_string().as_bytes(),
+                &request(),
+                Limits::default(),
+                LlamaServerIdentity {
+                    build_info: "b123-deadbeef".to_owned(),
+                    model: "qwen2.5-1.5b".to_owned(),
+                    model_sha256: "b".repeat(64),
+                }
+            ),
+            Err(ProviderError::IncompleteResponse)
         );
     }
 }

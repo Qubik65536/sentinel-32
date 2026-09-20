@@ -160,7 +160,9 @@ activation, control outputs, deterministic policy, or safety evidence.
 
 Qwen2.5 1.5B can fail the strict output contract. Such output is rejected and
 reported as checker unavailable; it is never repaired into an authoritative
-result.
+result. The deployment request disables model reasoning, caps citation-array
+and rationale lengths, and reports a token-limited completion separately from
+malformed output.
 
 ## Cleanup and records
 
