@@ -155,6 +155,10 @@ activation, control outputs, deterministic policy, or safety evidence.
   the running server.
 - contract error: the model returned structurally or semantically invalid
   findings; discard the whole advisory result.
+- `InvalidProviderResponse` after a `stop` completion: capture the raw response
+  without its credential. The client accepts plain schema JSON and the exact
+  whole-response Markdown JSON fence observed from the QNX server; any
+  other preamble, trailing text, or malformed wrapper remains invalid.
 - timeout or response-size error: reduce load or investigate the server. Do not
   increase limits without reviewing the bounded-data assumptions.
 

@@ -236,9 +236,9 @@ fn parse_llama_completion(
     if choice.finish_reason.as_deref() != Some("stop") {
         return Err(ProviderError::IncompleteResponse);
     }
-    let content = choice.message.content.as_bytes();
+    let content = model_json_payload(&choice.message.content)?;
     let findings: ModelFindings =
-        serde_json::from_slice(content).map_err(|_| ProviderError::InvalidProviderResponse)?;
+        serde_json::from_str(content).map_err(|_| ProviderError::InvalidProviderResponse)?;
     validate_wrapped_findings(
         request,
         limits,
@@ -251,6 +251,22 @@ fn parse_llama_completion(
             prompt_contract: PROMPT_CONTRACT.to_owned(),
         },
     )
+}
+
+fn model_json_payload(content: &str) -> Result<&str, ProviderError> {
+    let content = content.trim();
+    let Some(after_opening) = content
+        .strip_prefix("```json")
+        .or_else(|| content.strip_prefix("```JSON"))
+        .or_else(|| content.strip_prefix("```"))
+    else {
+        return Ok(content);
+    };
+    let inner = after_opening
+        .trim_start_matches(['\r', '\n'])
+        .strip_suffix("```")
+        .ok_or(ProviderError::InvalidProviderResponse)?;
+    Ok(inner.trim())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -641,7 +657,7 @@ mod tests {
         });
         let completion = json!({
             "choices": [{
-                "message": {"content": findings.to_string()},
+                "message": {"content": format!("```json\n{}\n```", findings)},
                 "finish_reason": "stop"
             }]
         });

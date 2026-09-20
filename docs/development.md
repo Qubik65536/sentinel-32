@@ -141,6 +141,10 @@ and reached the same licensed final-link failure.
 After tightening the live `llama.cpp` response contract, `cargo +qnx800 check
 --workspace --target aarch64-unknown-nto-qnx800 --release` completed for all
 workspace crates. A new linked binary and target rerun are still required.
+The same check completed again after adding normalization for the complete
+Markdown JSON fence observed in a live QNX server response. This establishes
+target compilation only; the rebuilt executable still needs to be linked,
+transferred, and run against that server.
 
 ## Raspberry Pi 5 deployment directory
 
